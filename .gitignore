@@ -1,0 +1,11 @@
+# Build outputs
+build*
+*.md
+*.out
+*.txt
+*.bin
+*.dot
+build*/
+out-*/
+__pycache__/*
+
