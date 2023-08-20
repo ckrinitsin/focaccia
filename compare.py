@@ -3,6 +3,7 @@ import re
 import sys
 import shutil
 import argparse
+from typing import List
 from functools import partial as bind
 
 from utils import check_version
@@ -71,6 +72,15 @@ class Constructor:
 
         self.cblocks[-1].regs[key] = value
 
+class Transformations:
+    def __init__(self, previous: ContextBlock, current: ContextBlock):
+        self.transformation = ContextBlock()
+        for el1 in current.regs.keys():
+            for el2 in previous.regs.keys():
+                if el1 != el2:
+                    continue
+                self.transformation.regs[el1] = current.regs[el1] - previous.regs[el2]
+
 def parse(lines: list, labels: list):
     ctor = Constructor(labels)
 
@@ -115,10 +125,15 @@ def get_labels():
               'flag DF': split_second}
     return labels
 
-def equivalent(val1, val2):
-    return val1 == val2
+def equivalent(val1, val2, transformation, previous_translation):
+    if val1 == val2:
+        return True
 
-def verify(translation: ContextBlock, reference: ContextBlock):
+    # TODO: maybe incorrect
+    return val1 - previous_translation == transformation
+
+def verify(translation: ContextBlock, reference: ContextBlock,
+           transformation: Transformations, previous_translation: ContextBlock):
     if translation.regs["PC"] != reference.regs["PC"]:
         return 1
 
@@ -138,11 +153,12 @@ def verify(translation: ContextBlock, reference: ContextBlock):
                 print(f'Element not available in reference: {el2}')
                 continue
 
-            if not equivalent(translation.regs[el1], reference.regs[el2]):
+            if not equivalent(translation.regs[el1], reference.regs[el2],
+                              transformation.regs[el1], previous_translation.regs[el1]):
                 print(f'Difference for {el1}: {hex(translation.regs[el1])} != {hex(reference.regs[el2])}')
     return 0
 
-def compare(txl: list, native: list, stats: bool = False):
+def compare(txl: List[ContextBlock], native: List[ContextBlock], stats: bool = False):
     txl = parse(txl, get_labels())
     native = parse(native, get_labels())
 
@@ -150,15 +166,22 @@ def compare(txl: list, native: list, stats: bool = False):
         print(f'Different number of blocks discovered translation: {len(txl)} vs. '
               f'reference: {len(native)}', file=sys.stderr)
 
+    previous_reference = native[0]
+    previous_translation = txl[0]
+
     unmatched_pcs = {}
     for translation, reference in zip(txl, native):
-        if verify(translation, reference) == 1:
+        transformations = Transformations(previous_reference, reference)
+        if verify(translation, reference, transformations.transformation, previous_translation) == 1:
             # TODO: add verbose output
             print_separator(stream=sys.stderr)
             print(f'No match for PC {hex(translation.regs["PC"])}', file=sys.stderr)
             if translation.regs['PC'] not in unmatched_pcs:
                 unmatched_pcs[translation.regs['PC']] = 0
             unmatched_pcs[translation.regs['PC']] += 1
+
+        previous_reference = reference
+        previous_translation = translation
 
     if stats:
         print_separator()
