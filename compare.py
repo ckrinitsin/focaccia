@@ -41,6 +41,7 @@ class ContextBlock:
     def __init__(self):
         self.regs = {reg: None for reg in ContextBlock.regnames}
         self.has_backwards = False
+        self.matched = False
 
     def set_backwards(self):
         self.has_backwards = True
@@ -195,6 +196,7 @@ def compare(txl: List[ContextBlock], native: List[ContextBlock], stats: bool = F
                 reference = native[i]
                 transformations = Transformations(previous_reference, reference)
                 if verify(translation, reference, transformations.transformation, previous_translation) == 0:
+                    reference.matched = True
                     break
 
                 i += 1
@@ -244,6 +246,8 @@ def compare(txl: List[ContextBlock], native: List[ContextBlock], stats: bool = F
                 if translation.regs['PC'] not in unmatched_pcs:
                     unmatched_pcs[translation.regs['PC']] = 0
                 unmatched_pcs[translation.regs['PC']] += 1
+            else:
+                reference.matched = True
 
             if translation.has_backwards:
                 next(native)
@@ -258,6 +262,19 @@ def compare(txl: List[ContextBlock], native: List[ContextBlock], stats: bool = F
 
         for pc in unmatched_pcs:
             print(f'PC {hex(pc)} unmatched {unmatched_pcs[pc]} times')
+
+        # NOTE: currently doesn't handle mismatched due backward branches
+        current = ""
+        unmatched_count = 0
+        for ref in native:
+            ref_pc = ref.regs['PC']
+            if ref_pc != current:
+                if unmatched_count:
+                    print(f'Reference PC {hex(current)} unmatched {unmatched_count} times')
+                current = ref_pc
+
+            if ref.matched == False:
+                unmatched_count += 1
     return 0
 
 def read_logs(txl_path, native_path, program):
