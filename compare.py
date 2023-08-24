@@ -185,6 +185,7 @@ def compare(txl: List[ContextBlock], native: List[ContextBlock], stats: bool = F
     previous_translation = txl[0]
 
     unmatched_pcs = {}
+    pc_to_skip = ""
     if progressive:
         i = 0
         for translation in txl:
@@ -196,12 +197,13 @@ def compare(txl: List[ContextBlock], native: List[ContextBlock], stats: bool = F
                 if verify(translation, reference, transformations.transformation, previous_translation) == 0:
                     break
 
-                previous_reference = reference
-                previous_translation = translation
                 i += 1
+
+            matched = True
 
             # Didn't find anything
             if i == len(native):
+                matched = False
                 # TODO: add verbose output
                 print_separator(stream=sys.stdout)
                 print(f'No match for PC {hex(translation.regs["PC"])}', file=sys.stdout)
@@ -209,9 +211,26 @@ def compare(txl: List[ContextBlock], native: List[ContextBlock], stats: bool = F
                     unmatched_pcs[translation.regs['PC']] = 0
                 unmatched_pcs[translation.regs['PC']] += 1
 
-                i = previous + 1
+                i = previous
 
-            if translation.has_backwards:
+            # Necessary since we may have run out of native BBs to check and
+            # previous becomes len(native)
+            #
+            # We continue checking to report unmatched translation PCs
+            if i < len(native):
+                previous_reference = native[i]
+
+            previous_translation = translation
+
+            # Skip next reference when there is a backwards branch
+            # NOTE: if a reference was skipped, don't skip it again
+            #       necessary for loops which may have multiple backwards
+            #       branches
+            if translation.has_backwards and translation.regs['PC'] != pc_to_skip:
+                pc_to_skip = translation.regs['PC']
+                i += 1
+
+            if matched:
                 i += 1
     else:
         txl = iter(txl)
@@ -297,6 +316,12 @@ if __name__ == "__main__":
     stats = args.stats
     verbose = args.verbose
     progressive = args.progressive
+
+    if verbose:
+        print("Enabling verbose program output")
+        print(f"Verbose: {verbose}")
+        print(f"Statistics: {stats}")
+        print(f"Progressive: {progressive}")
 
     if program is None and native_path is None:
         raise ValueError('Either program or path to native file must be'
