@@ -22,7 +22,19 @@ PYTHONPATH="$PYTHONPATH:$(./build/bin/lldb -P)"
 
 It will take a while to compile.
 
-## Snapshot-comparison framework
+## How To Use
+
+`focaccia.py` is the main executable. Invoke `focaccia.py --help` to see what you can do with it.
+
+## Tools
+
+The `tools/` directory contains additional utility scripts to work with focaccia.
+
+ - `convert.py`: Convert logs from QEMU or Arancini to focaccia's snapshot log format.
+
+## Project Overview (for developers)
+
+### Snapshot-comparison framework
 
 The following files belong to a rough framework for the snapshot comparison engine:
 
