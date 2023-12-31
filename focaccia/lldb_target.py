@@ -1,7 +1,7 @@
 import lldb
 
-from arch import supported_architectures, x86
-from snapshot import ProgramState
+from .arch import supported_architectures, x86
+from .snapshot import ProgramState
 
 class MemoryMap:
     """Description of a range of mapped memory.
@@ -30,9 +30,6 @@ class LLDBConcreteTarget:
     def __init__(self, executable: str, argv: list[str] = []):
         """Construct an LLDB concrete target. Stop at entry.
 
-        :param argv: The full argv array, including the executable's path as
-                     the first argument (as is convention).
-
         :raises RuntimeError: If the process is unable to launch.
         """
         self.debugger = lldb.SBDebugger.Create()
@@ -46,8 +43,10 @@ class LLDBConcreteTarget:
         self.error = lldb.SBError()
         self.listener = self.debugger.GetListener()
         self.process = self.target.Launch(self.listener,
-                                          argv, None, None,
-                                          None, None, None, 0,
+                                          argv, None,        # argv, envp
+                                          None, None, None,  # stdin, stdout, stderr
+                                          None,              # working directory
+                                          0,
                                           True, self.error)
         if not self.process.IsValid():
             raise RuntimeError(f'[In LLDBConcreteTarget.__init__]: Failed to'
