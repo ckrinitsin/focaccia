@@ -7,6 +7,7 @@ from typing import TextIO
 
 from .arch import supported_architectures, Arch
 from .snapshot import ProgramState
+from .symbolic import SymbolicTransform
 
 class ParseError(Exception):
     """A parse error."""
@@ -18,6 +19,20 @@ def _get_or_throw(obj: dict, key: str):
         return val
     raise ParseError(f'Expected value at key {key}, but found none.')
 
+def parse_transformations(json_stream: TextIO) -> list[SymbolicTransform]:
+    """Parse symbolic transformations from a text stream."""
+    from .symbolic import parse_symbolic_transform
+
+    json_data = json.load(json_stream)
+    return [parse_symbolic_transform(item) for item in json_data]
+
+def serialize_transformations(transforms: list[SymbolicTransform],
+                              out_stream: TextIO):
+    """Serialize symbolic transformations to a text stream."""
+    from .symbolic import serialize_symbolic_transform
+
+    json.dump([serialize_symbolic_transform(t) for t in transforms], out_stream)
+
 def parse_snapshots(json_stream: TextIO) -> list[ProgramState]:
     """Parse snapshots from our JSON format."""
     json_data = json.load(json_stream)
@@ -27,7 +42,7 @@ def parse_snapshots(json_stream: TextIO) -> list[ProgramState]:
     for snapshot in _get_or_throw(json_data, 'snapshots'):
         state = ProgramState(arch)
         for reg, val in _get_or_throw(snapshot, 'registers').items():
-            state.set(reg, val)
+            state.set_register(reg, val)
         for mem in _get_or_throw(snapshot, 'memory'):
             start, end = _get_or_throw(mem, 'range')
             data = base64.b64decode(_get_or_throw(mem, 'data'))
@@ -111,7 +126,7 @@ def _parse_qemu_line(line: str, cur_state: ProgramState):
             value = value.replace(' ', '')
             regname = cur_state.arch.to_regname(regname)
             if regname is not None:
-                cur_state.set(regname, int(value, 16))
+                cur_state.set_register(regname, int(value, 16))
 
 def parse_arancini(stream: TextIO, arch: Arch) -> list[ProgramState]:
     aliases = {
@@ -136,6 +151,6 @@ def parse_arancini(stream: TextIO, arch: Arch) -> list[ProgramState]:
             regname, value = split
             regname = arch.to_regname(aliases.get(regname, regname))
             if regname is not None:
-                states[-1].set(regname, int(value, 16))
+                states[-1].set_register(regname, int(value, 16))
 
     return states
