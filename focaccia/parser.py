@@ -4,6 +4,7 @@ import base64
 import json
 import re
 from typing import TextIO
+import lldb
 
 from .arch import supported_architectures, Arch
 from .snapshot import ProgramState
