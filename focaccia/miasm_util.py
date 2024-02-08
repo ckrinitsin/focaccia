@@ -174,16 +174,17 @@ def _eval_cpuid(rax: ExprInt, out_reg: ExprInt):
 
 def _eval_exprop(expr, state: MiasmSymbolResolver):
     """Evaluate an ExprOp using the current state"""
-    args = []
-    for oarg in expr.args:
-        arg = eval_expr(oarg, state)
-        args.append(arg)
+    args = [eval_expr(arg, state) for arg in expr.args]
 
+    # Special case: CPUID instruction
+    # Evaluate the expression to a value obtained from an an actual call to
+    # the CPUID instruction. Can't do this in an expression simplifier plugin
+    # because the arguments must be concrete.
     if expr.op == 'x86_cpuid':
-        # Can't do this in an expression simplifier plugin because the
-        # arguments must be concrete.
-        assert(len(expr.args) == 2)
+        assert(len(args) == 2)
+        assert(isinstance(args[0], ExprInt) and isinstance(args[1], ExprInt))
         return _eval_cpuid(args[0], args[1])
+
     return ExprOp(expr.op, *args)
 
 def _eval_exprcompose(expr, state: MiasmSymbolResolver):

@@ -1,9 +1,13 @@
 from typing import Iterable
 
 class Arch():
-    def __init__(self, archname: str, regnames: Iterable[str]):
+    def __init__(self,
+                 archname: str,
+                 regnames: Iterable[str],
+                 ptr_size: int):
         self.archname = archname
         self.regnames = set(name.upper() for name in regnames)
+        self.ptr_size = ptr_size
 
     def to_regname(self, name: str) -> str | None:
         """Transform a string into a standard register name.

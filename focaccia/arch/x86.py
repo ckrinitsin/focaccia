@@ -6,32 +6,36 @@ archname = 'x86_64'
 
 # Names of registers in the architecture
 regnames = [
+    # 8-bit
+    'AL', 'CL', 'DL', 'BL', 'SPL', 'BPL', 'SIL', 'DIL',
+    'AH', 'CH', 'DH', 'BH',
+
+    # 16-bit
+    'IP',
+    'AX', 'BX', 'CX', 'DX', 'SI', 'DI', 'BP', 'SP',
+
+    # 32-bit
+    'EIP',
+    'EAX', 'EBX', 'ECX', 'EDX', 'ESI', 'EDI', 'EBP', 'ESP',
+    'EFLAGS',
+
+    # 64-bit
     'RIP',
-    'RAX',
-    'RBX',
-    'RCX',
-    'RDX',
-    'RSI',
-    'RDI',
-    'RBP',
-    'RSP',
-    'R8',
-    'R9',
-    'R10',
-    'R11',
-    'R12',
-    'R13',
-    'R14',
-    'R15',
+    'RAX', 'RBX', 'RCX', 'RDX', 'RSI', 'RDI', 'RBP', 'RSP',
+    'R8', 'R9', 'R10', 'R11', 'R12', 'R13', 'R14', 'R15',
     'RFLAGS',
 
     # x87 float registers
     'ST0', 'ST1', 'ST2', 'ST3', 'ST4', 'ST5', 'ST6', 'ST7',
 
     # Vector registers
-    'YMM0', 'YMM1', 'YMM2', 'YMM3', 'YMM4',
-    'YMM5', 'YMM6', 'YMM7', 'YMM8', 'YMM9',
-    'YMM10', 'YMM11', 'YMM12', 'YMM13', 'YMM14', 'YMM15',
+    'MM0', 'MM1', 'MM2', 'MM3', 'MM4', 'MM5', 'MM6', 'MM7',
+
+    'XMM0', 'XMM1', 'XMM2', 'XMM3', 'XMM4', 'XMM5', 'XMM6', 'XMM7',
+    'XMM8', 'XMM9', 'XMM10', 'XMM11', 'XMM12', 'XMM13', 'XMM14', 'XMM15',
+
+    'YMM0', 'YMM1', 'YMM2', 'YMM3', 'YMM4', 'YMM5', 'YMM6', 'YMM7',
+    'YMM8', 'YMM9', 'YMM10', 'YMM11', 'YMM12', 'YMM13', 'YMM14', 'YMM15',
 
     # Segment registers
     'CS', 'DS', 'SS', 'ES', 'FS', 'GS',
@@ -122,7 +126,7 @@ def compose_rflags(rflags: dict[str, int]) -> int:
 
 class ArchX86(Arch):
     def __init__(self):
-        super().__init__(archname, regnames)
+        super().__init__(archname, regnames, 64)
 
     def to_regname(self, name: str) -> str | None:
         """The X86 override of the standard register name lookup.

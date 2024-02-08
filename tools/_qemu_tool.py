@@ -7,11 +7,10 @@ work to do.
 """
 
 import gdb
-import platform
 from typing import Iterable
 
 import focaccia.parser as parser
-from focaccia.arch import supported_architectures, Arch
+from focaccia.arch import supported_architectures
 from focaccia.compare import compare_symbolic
 from focaccia.snapshot import ProgramState, ReadableProgramState, \
                               RegisterAccessError, MemoryAccessError
@@ -28,7 +27,21 @@ class GDBProgramState(ReadableProgramState):
     def read_register(self, reg: str) -> int:
         try:
             val = self._frame.read_register(reg.lower())
-            return int(val) & 0xffffffffffffffff  # force int to be unsigned
+            size = val.type.sizeof * 8
+
+            # For vector registers, we have to assemble Python's
+            # arbitrary-length integers from GDB's fixed-size integers
+            # ourselves:
+            if size > 64:  # Value is a vector
+                num_longs = size // 64
+                vals = val[f'v{num_longs}_int64']
+                res = 0
+                for i in range(num_longs):
+                    val = int(vals[i].cast(gdb.lookup_type('unsigned long')))
+                    res += val << i * 64
+                return res
+            # For non-vector values, just return the 64-bit value
+            return int(val.cast(gdb.lookup_type('unsigned long')))
         except ValueError as err:
             from focaccia.arch import x86
             rflags = int(self._frame.read_register('eflags'))
@@ -186,10 +199,11 @@ def collect_conc_trace(gdb: GDBServerStateIterator, \
     state_iter = iter(gdb)
     cur_state = next(state_iter)
     symb_i = 0
+
+    # An online trace matching algorithm.
     while True:
         try:
             pc = cur_state.read_register('pc')
-            assert(pc is not None)
 
             while pc != strace[symb_i].addr:
                 next_i = find_index(strace[symb_i+1:], pc, lambda t: t.addr)
@@ -202,7 +216,6 @@ def collect_conc_trace(gdb: GDBServerStateIterator, \
                           f' reference trace.')
                     cur_state = next(state_iter)
                     pc = cur_state.read_register('pc')
-                    assert(pc is not None)
                     continue
 
                 # Otherwise, jump to the next matching symbolic state

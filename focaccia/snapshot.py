@@ -19,7 +19,7 @@ class SparseMemory:
     Note that out-of-bound reads are possible when performed on unwritten
     sections of existing pages and that there is no safeguard check for them.
     """
-    def __init__(self, page_size=4096):
+    def __init__(self, page_size=256):
         self.page_size = page_size
         self._pages: dict[int, bytes] = {}
 
@@ -164,5 +164,5 @@ class ProgramState(ReadableProgramState):
         self.mem.write(addr, data)
 
     def __repr__(self):
-        return f'Snapshot ({self.arch.archname}): ' \
-               + repr({r: hex(v) for r, v in self.regs.items() if v is not None})
+        regs = {r: hex(v) for r, v in self.regs.items() if v is not None}
+        return f'Snapshot ({self.arch.archname}): {regs}'
