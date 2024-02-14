@@ -26,9 +26,35 @@ def simp_segm(expr_simp, expr: ExprOp):
         return expr_simp(base_regs[segm] + addr)
     return expr
 
+def simp_fadd(expr_simp, expr: ExprOp):
+    from .utils import float_bits_to_uint, uint_bits_to_float, \
+                       double_bits_to_uint, uint_bits_to_double
+
+    if expr.op != 'fadd':
+        return expr
+
+    assert(len(expr.args) == 2)
+    lhs, rhs = expr.args
+    if lhs.is_int() and rhs.is_int():
+        assert(lhs.size == rhs.size)
+        if lhs.size == 32:
+            uint_to_float = uint_bits_to_float
+            float_to_uint = float_bits_to_uint
+        elif lhs.size == 64:
+            uint_to_float = uint_bits_to_double
+            float_to_uint = double_bits_to_uint
+        else:
+            raise NotImplementedError('fadd on values of size not in {32, 64}')
+
+        res = float_to_uint(uint_to_float(lhs.arg) + uint_to_float(rhs.arg))
+        return expr_simp(ExprInt(res, expr.size))
+    return expr
+
 # The expression simplifier used in this module
 expr_simp = expr_simp_explicit
-expr_simp.enable_passes({ExprOp: [simp_segm]})
+expr_simp.enable_passes({
+    ExprOp: [simp_segm, simp_fadd],
+})
 
 class MiasmSymbolResolver:
     """Resolves atomic symbols to some state."""
@@ -126,23 +152,18 @@ def _eval_exprmem(expr: ExprMem, state: MiasmSymbolResolver):
     """Evaluate an ExprMem using the current state.
     This function first evaluates the memory pointer value.
     """
-    # TODO: Implement cases with more than 64 bytes.
-    #
-    # The symbolic memory class used in SymbolicExecutionEngine may return
-    # ExprCompose objects here. Maybe I should use that.
-    assert(expr.size <= 64)
     assert(expr.size % 8 == 0)
 
     addr = eval_expr(expr.ptr, state)
     if not addr.is_int():
         return expr
 
-    mem = state.resolve_memory(int(addr), int(expr.size / 8))
+    mem = state.resolve_memory(int(addr), expr.size // 8)
     if mem is None:
         return expr
 
     assert(len(mem) * 8 == expr.size)
-    return ExprInt(int.from_bytes(mem), expr.size)
+    return ExprInt(int.from_bytes(mem, byteorder='big'), expr.size)
 
 def _eval_exprcond(expr, state: MiasmSymbolResolver):
     """Evaluate an ExprCond using the current state"""

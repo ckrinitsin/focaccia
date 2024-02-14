@@ -1,7 +1,24 @@
+import ctypes
 import sys
 import shutil
 
 from .compare import ErrorSeverity
+
+def float_bits_to_uint(v: float) -> int:
+    """Bit-cast a float to a 32-bit integer."""
+    return ctypes.c_uint32.from_buffer(ctypes.c_float(v)).value
+
+def uint_bits_to_float(v: int) -> float:
+    """Bit-cast a 32-bit integer to a float."""
+    return ctypes.c_float.from_buffer(ctypes.c_uint32(v)).value
+
+def double_bits_to_uint(v: float) -> int:
+    """Bit-cast a double to a 64-bit integer."""
+    return ctypes.c_uint64.from_buffer(ctypes.c_double(v)).value
+
+def uint_bits_to_double(v: int) -> float:
+    """Bit-cast a 64-bit integer to a double."""
+    return ctypes.c_double.from_buffer(ctypes.c_uint64(v)).value
 
 def print_separator(separator: str = '-', stream=sys.stdout, count: int = 80):
     maxtermsize = count
