@@ -38,12 +38,12 @@ transformation during emulation against a symbolic truth.
 In fact, this tool could be used to test any emulator that provides a
 GDB-server interface. The server must support reading registers, reading
 memory, and stepping forward by single instructions.
-
-The GDB server is assumed to be at 'localhost'.
 """
+    prog.add_argument('hostname',
+                      help='The hostname at which to find the GDB server.')
     prog.add_argument('port',
                       type=int,
-                      help='The port at which QEMU\'s GDB server resides.')
+                      help='The port at which to find the GDB server.')
     prog.add_argument('--symb-trace',
                       required=True,
                       help='A pre-computed symbolic transformation trace to' \
@@ -54,8 +54,8 @@ The GDB server is assumed to be at 'localhost'.
                       action='store_true',
                       help='Don\'t print a verification result.')
     prog.add_argument('-o', '--output',
-                      help='If specified with a file name, the recorded trace'
-                           ' of QEMU states will be written to that file.')
+                      help='If specified with a file name, the recorded'
+                           ' emulator states will be written to that file.')
     prog.add_argument('--error-level',
                       default='warning',
                       choices=list(verbosity.keys()))
@@ -73,7 +73,7 @@ def try_remove(l: list, v):
 if __name__ == "__main__":
     prog = make_argparser()
     prog.add_argument('--gdb', default='/bin/gdb',
-                      help='GDB binary to invoke')
+                      help='GDB binary to invoke.')
     args = prog.parse_args()
 
     filepath = os.path.realpath(__file__)
