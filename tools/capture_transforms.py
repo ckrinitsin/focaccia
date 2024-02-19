@@ -2,9 +2,11 @@
 
 import argparse
 import logging
+import os
 
 from focaccia import parser
 from focaccia.symbolic import collect_symbolic_trace
+from focaccia.trace import Trace, TraceEnvironment
 
 def main():
     prog = argparse.ArgumentParser()
@@ -19,7 +21,10 @@ def main():
     args = prog.parse_args()
 
     logging.disable(logging.CRITICAL)
-    trace = collect_symbolic_trace(args.binary, args.args, None)
+    env = TraceEnvironment(args.binary,
+                           args.args,
+                           [f'{k}={v}' for k, v in os.environ.items()])
+    trace = collect_symbolic_trace(env, None)
     with open(args.output, 'w') as file:
         parser.serialize_transformations(trace, file)
 

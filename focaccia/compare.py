@@ -1,36 +1,9 @@
-from functools import total_ordering
-from typing import Iterable, Self
+from __future__ import annotations
+from typing import Iterable
 
 from .snapshot import ProgramState, MemoryAccessError, RegisterAccessError
 from .symbolic import SymbolicTransform
-
-@total_ordering
-class ErrorSeverity:
-    def __init__(self, num: int, name: str):
-        """Construct an error severity.
-
-        :param num:  A numerical value that orders the severity with respect
-                     to other `ErrorSeverity` objects. Smaller values are less
-                     severe.
-        :param name: A descriptive name for the error severity, e.g. 'fatal'
-                     or 'info'.
-        """
-        self._numeral = num
-        self.name = name
-
-    def __repr__(self) -> str:
-        return f'[{self.name}]'
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Self):
-            return False
-        return self._numeral == other._numeral
-
-    def __lt__(self, other: Self) -> bool:
-        return self._numeral < other._numeral
-
-    def __hash__(self) -> int:
-        return hash(self._numeral)
+from .utils import ErrorSeverity
 
 class ErrorTypes:
     INFO       = ErrorSeverity(0, 'INFO')

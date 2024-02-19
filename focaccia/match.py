@@ -54,6 +54,8 @@ def fold_traces(ctrace: list[ProgramState],
     while i + 1 < len(strace):
         strace[i].concat(strace.pop(i + 1))
 
+    return ctrace, strace
+
 def match_traces(ctrace: list[ProgramState], \
                  strace: list[SymbolicTransform]):
     """Try to match traces that don't follow the same program flow.

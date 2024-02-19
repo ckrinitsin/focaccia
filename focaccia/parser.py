@@ -4,11 +4,11 @@ import base64
 import json
 import re
 from typing import TextIO
-import lldb
 
 from .arch import supported_architectures, Arch
 from .snapshot import ProgramState
 from .symbolic import SymbolicTransform
+from .trace import Trace, TraceEnvironment
 
 class ParseError(Exception):
     """A parse error."""
@@ -20,25 +20,30 @@ def _get_or_throw(obj: dict, key: str):
         return val
     raise ParseError(f'Expected value at key {key}, but found none.')
 
-def parse_transformations(json_stream: TextIO) -> list[SymbolicTransform]:
+def parse_transformations(json_stream: TextIO) -> Trace[SymbolicTransform]:
     """Parse symbolic transformations from a text stream."""
-    from .symbolic import parse_symbolic_transform
+    data = json.load(json_stream)
 
-    json_data = json.load(json_stream)
-    return [parse_symbolic_transform(item) for item in json_data]
+    env = TraceEnvironment.from_json(_get_or_throw(data, 'env'))
+    strace = [SymbolicTransform.from_json(item) \
+              for item in _get_or_throw(data, 'states')]
 
-def serialize_transformations(transforms: list[SymbolicTransform],
+    return Trace(strace, env)
+
+def serialize_transformations(transforms: Trace[SymbolicTransform],
                               out_stream: TextIO):
     """Serialize symbolic transformations to a text stream."""
-    from .symbolic import serialize_symbolic_transform
+    json.dump({
+        'env': transforms.env.to_json(),
+        'states': [t.to_json() for t in transforms],
+    }, out_stream)
 
-    json.dump([serialize_symbolic_transform(t) for t in transforms], out_stream)
-
-def parse_snapshots(json_stream: TextIO) -> list[ProgramState]:
+def parse_snapshots(json_stream: TextIO) -> Trace[ProgramState]:
     """Parse snapshots from our JSON format."""
     json_data = json.load(json_stream)
 
     arch = supported_architectures[_get_or_throw(json_data, 'architecture')]
+    env = TraceEnvironment.from_json(_get_or_throw(json_data, 'env'))
     snapshots = []
     for snapshot in _get_or_throw(json_data, 'snapshots'):
         state = ProgramState(arch)
@@ -52,15 +57,19 @@ def parse_snapshots(json_stream: TextIO) -> list[ProgramState]:
 
         snapshots.append(state)
 
-    return snapshots
+    return Trace(snapshots, env)
 
-def serialize_snapshots(snapshots: list[ProgramState], out_stream: TextIO):
+def serialize_snapshots(snapshots: Trace[ProgramState], out_stream: TextIO):
     """Serialize a list of snapshots to out JSON format."""
     if not snapshots:
         return json.dump({}, out_stream)
 
     arch = snapshots[0].arch
-    res = { 'architecture': arch.archname, 'snapshots': [] }
+    res = {
+        'architecture': arch.archname,
+        'env': snapshots.env.to_json(),
+        'snapshots': []
+    }
     for snapshot in snapshots:
         assert(snapshot.arch == arch)
         regs = {r: v for r, v in snapshot.regs.items() if v is not None}
@@ -74,8 +83,14 @@ def serialize_snapshots(snapshots: list[ProgramState], out_stream: TextIO):
 
     json.dump(res, out_stream)
 
-def parse_qemu(stream: TextIO, arch: Arch) -> list[ProgramState]:
+def _make_unknown_env() -> TraceEnvironment:
+    return TraceEnvironment('', [], [], '?')
+
+def parse_qemu(stream: TextIO, arch: Arch) -> Trace[ProgramState]:
     """Parse a QEMU log from a stream.
+
+    Recommended QEMU log option: `qemu -d exec,cpu,fpu,vpu,nochain`. The `exec`
+    flag is strictly necessary for the log to be parseable.
 
     :return: A list of parsed program states, in order of occurrence in the
              log.
@@ -88,7 +103,7 @@ def parse_qemu(stream: TextIO, arch: Arch) -> list[ProgramState]:
         if states:
             _parse_qemu_line(line, states[-1])
 
-    return states
+    return Trace(states, _make_unknown_env())
 
 def _parse_qemu_line(line: str, cur_state: ProgramState):
     """Try to parse a single register-assignment line from a QEMU log.
@@ -129,7 +144,7 @@ def _parse_qemu_line(line: str, cur_state: ProgramState):
             if regname is not None:
                 cur_state.set_register(regname, int(value, 16))
 
-def parse_arancini(stream: TextIO, arch: Arch) -> list[ProgramState]:
+def parse_arancini(stream: TextIO, arch: Arch) -> Trace[ProgramState]:
     aliases = {
         'Program counter': 'RIP',
         'flag ZF': 'ZF',
@@ -154,4 +169,4 @@ def parse_arancini(stream: TextIO, arch: Arch) -> list[ProgramState]:
             if regname is not None:
                 states[-1].set_register(regname, int(value, 16))
 
-    return states
+    return Trace(states, _make_unknown_env())

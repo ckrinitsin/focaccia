@@ -20,6 +20,7 @@ from .lldb_target import LLDBConcreteTarget, \
 from .miasm_util import MiasmSymbolResolver, eval_expr
 from .snapshot import ProgramState, ReadableProgramState, \
                       RegisterAccessError, MemoryAccessError
+from .trace import Trace, TraceEnvironment
 
 warn = logging.warning
 
@@ -342,6 +343,49 @@ class SymbolicTransform:
             res[addr] = eval_symbol(expr, conc_state).to_bytes(length, byteorder='big')
         return res
 
+    @classmethod
+    def from_json(cls, data: dict) -> SymbolicTransform:
+        """Parse a symbolic transformation from a JSON object.
+
+        :raise KeyError: if a parse error occurs.
+        """
+        from miasm.expression.parser import str_to_expr as parse
+
+        def decode_inst(obj: Iterable[int], arch: Arch):
+            b = b''.join(i.to_bytes(1, byteorder='big') for i in obj)
+            return Instruction.from_bytecode(b, arch)
+
+        arch = supported_architectures[data['arch']]
+        start_addr = int(data['from_addr'])
+        end_addr = int(data['to_addr'])
+
+        t = SymbolicTransform({}, [], arch, start_addr, end_addr)
+        t.changed_regs = { name: parse(val) for name, val in data['regs'].items() }
+        t.changed_mem = { parse(addr): parse(val) for addr, val in data['mem'].items() }
+        t.instructions = [decode_inst(b, arch) for b in data['instructions']]
+
+        # Recover the instructions' address information
+        addr = t.addr
+        for inst in t.instructions:
+            inst.addr = addr
+            addr += inst.length
+
+        return t
+
+    def to_json(self) -> dict:
+        """Serialize a symbolic transformation as a JSON object."""
+        def encode_inst(inst: Instruction):
+            return [int(b) for b in inst.to_bytecode()]
+
+        return {
+            'arch': self.arch.archname,
+            'from_addr': self.range[0],
+            'to_addr': self.range[1],
+            'instructions': [encode_inst(inst) for inst in self.instructions],
+            'regs': { name: repr(expr) for name, expr in self.changed_regs.items() },
+            'mem': { repr(addr): repr(val) for addr, val in self.changed_mem.items() },
+        }
+
     def __repr__(self) -> str:
         start, end = self.range
         res = f'Symbolic state transformation {hex(start)} -> {hex(end)}:\n'
@@ -355,51 +399,6 @@ class SymbolicTransform:
             res += f'    {inst}\n'
 
         return res[:-1]  # Remove trailing newline
-
-def parse_symbolic_transform(string: str) -> SymbolicTransform:
-    """Parse a symbolic transformation from a string.
-    :raise KeyError: if a parse error occurs.
-    """
-    import json
-    from miasm.expression.parser import str_to_expr as parse
-
-    def decode_inst(obj: Iterable[int], arch: Arch):
-        b = b''.join(i.to_bytes(1, byteorder='big') for i in obj)
-        return Instruction.from_bytecode(b, arch)
-
-    data = json.loads(string)
-    arch = supported_architectures[data['arch']]
-    start_addr = int(data['from_addr'])
-    end_addr = int(data['to_addr'])
-
-    t = SymbolicTransform({}, [], arch, start_addr, end_addr)
-    t.changed_regs = { name: parse(val) for name, val in data['regs'].items() }
-    t.changed_mem = { parse(addr): parse(val) for addr, val in data['mem'].items() }
-    t.instructions = [decode_inst(b, arch) for b in data['instructions']]
-
-    # Recover the instructions' address information
-    addr = t.addr
-    for inst in t.instructions:
-        inst.addr = addr
-        addr += inst.length
-
-    return t
-
-def serialize_symbolic_transform(t: SymbolicTransform) -> str:
-    """Serialize a symbolic transformation."""
-    import json
-
-    def encode_inst(inst: Instruction):
-        return [int(b) for b in inst.to_bytecode()]
-
-    return json.dumps({
-        'arch': t.arch.archname,
-        'from_addr': t.range[0],
-        'to_addr': t.range[1],
-        'instructions': [encode_inst(inst) for inst in t.instructions],
-        'regs': { name: repr(expr) for name, expr in t.changed_regs.items() },
-        'mem': { repr(addr): repr(val) for addr, val in t.changed_mem.items() },
-    })
 
 class DisassemblyContext:
     def __init__(self, binary):
@@ -419,6 +418,7 @@ class DisassemblyContext:
         """Focaccia's description of an instruction set architecture."""
 
         # Create disassembly/lifting context
+        assert(self.machine.dis_engine is not None)
         self.mdis = self.machine.dis_engine(cont.bin_stream, loc_db=self.loc_db)
         self.mdis.follow_call = True
         self.lifter = self.machine.lifter(self.loc_db)
@@ -427,56 +427,122 @@ def run_instruction(instr: miasm_instr,
                     conc_state: MiasmSymbolResolver,
                     lifter: Lifter) \
         -> tuple[ExprInt | None, dict[Expr, Expr]]:
-    """Run a basic block.
+    """Compute the symbolic equation of a single instruction.
 
-    Tries to run IR blocks until the end of an ASM block/basic block is
-    reached. Skips 'virtual' blocks that purely exist in the IR.
+    The concolic engine tries to express the instruction's equation as
+    independent of the concrete state as possible.
+
+    May fail if the instruction is not supported. Failure is signalled by
+    returning `None` as the next program counter.
 
     :param instr:      The instruction to run.
     :param conc_state: A concrete reference state at `pc = instr.offset`. Used
-                       to resolve symbolic program counters, i.e. to 'guide' the
-                       symbolic execution on the correct path. This is the
+                       to resolve symbolic program counters, i.e. to 'guide'
+                       the symbolic execution on the correct path. This is the
                        concrete part of our concolic execution.
-    :param lifter:     A lifter of the appropriate architecture. Get this from a
-                       `DisassemblyContext` or a `Machine`.
+    :param lifter:     A lifter of the appropriate architecture. Get this from
+                       a `DisassemblyContext` or a `Machine`.
 
-    :return: The next program counter and a symbolic state. None if no next
-             program counter can be found. This happens when an error occurs or
-             when the program exits. The state represents the transformation
-             which the instruction applies to a program state.
+    :return: The next program counter and a symbolic state. The PC is None if
+             an error occurs or when the program exits. The returned state
+             is `instr`'s symbolic transformation.
     """
-    def execute_location(loc, base_state: dict | None) -> tuple[ExprInt | None, dict]:
+    from miasm.expression.expression import ExprCond, LocKey
+    from miasm.expression.simplifications import expr_simp
+
+    def create_cond_state(cond: Expr, iftrue: dict, iffalse: dict) -> dict:
+        """Combines states that are to be reached conditionally.
+
+        Example:
+            State A:
+                RAX          = 0x42
+                @[RBP - 0x4] = 0x123
+            State B:
+                RDI          = -0x777
+                @[RBP - 0x4] = 0x5c32
+            Condition:
+                RCX > 0x4 ? A : B
+
+            Result State:
+                RAX          = (RCX > 0x4) ? 0x42 : RAX
+                RDI          = (RCX > 0x4) ? RDI : -0x777
+                @[RBP - 0x4] = (RCX > 0x4) ? 0x123 : 0x5c32
+        """
+        res = {}
+        for dst, v in iftrue.items():
+            if dst not in iffalse:
+                res[dst] = expr_simp(ExprCond(cond, v, dst))
+            else:
+                res[dst] = expr_simp(ExprCond(cond, v, iffalse[dst]))
+        for dst, v in iffalse.items():
+            if dst not in iftrue:
+                res[dst] = expr_simp(ExprCond(cond, dst, v))
+        return res
+
+    def _execute_location(loc, base_state: dict | None) \
+            -> tuple[Expr, dict]:
+        """Execute a single IR block via symbolic engine. No fancy stuff."""
         # Query the location's IR block
         irblock = ircfg.get_block(loc)
         if irblock is None:
-            # Weirdly, this never seems to happen. I don't know why, though.
-            return None, base_state if base_state is not None else {}
+            return loc, base_state if base_state is not None else {}
 
         # Apply IR block to the current state
         engine = SymbolicExecutionEngine(lifter, state=base_state)
         new_pc = engine.eval_updt_irblock(irblock)
         modified = dict(engine.modified())
+        return new_pc, modified
 
-        # Resolve the symbolic PC to a concrete value based on the
-        # concrete program state before this instruction
-        new_pc = eval_expr(new_pc, conc_state)
-        if new_pc.is_loc():
-            # Run chained IR blocks until a real program counter is reached
-            new_pc, modified = execute_location(new_pc, modified)
+    def execute_location(loc: Expr | LocKey) -> tuple[ExprInt, dict]:
+        """Execute chains of IR blocks until a concrete program counter is
+        reached."""
+        seen_locs = set()  # To break out of loop instructions
+        new_pc, modified = _execute_location(loc, None)
 
-        assert(new_pc is not None and isinstance(new_pc, ExprInt))
+        # Run chained IR blocks until a real program counter is reached.
+        # This used to be recursive (and much more elegant), but large RCX
+        # values for 'REP ...' instructions could make the stack overflow.
+        while not new_pc.is_int():
+            seen_locs.add(new_pc)
+
+            if new_pc.is_loc():
+                # Jump to the next location.
+                new_pc, modified = _execute_location(new_pc, modified)
+            elif new_pc.is_cond():
+                # Explore conditional paths manually by constructing
+                # conditional states based on the possible outcomes.
+                assert(isinstance(new_pc, ExprCond))
+                cond = new_pc.cond
+                pc_iftrue, pc_iffalse = new_pc.src1, new_pc.src2
+
+                pc_t, state_t = _execute_location(pc_iftrue, modified.copy())
+                pc_f, state_f = _execute_location(pc_iffalse, modified.copy())
+                modified = create_cond_state(cond, state_t, state_f)
+                new_pc = expr_simp(ExprCond(cond, pc_t, pc_f))
+            else:
+                # Concretisize PC in case it is, e.g., a memory expression
+                new_pc = eval_expr(new_pc, conc_state)
+
+            # Avoid infinite loops for loop instructions (REP ...) by making
+            # the jump to the next loop iteration (or exit) concrete.
+            if new_pc in seen_locs:
+                new_pc = eval_expr(new_pc, conc_state)
+                seen_locs.clear()
+
+        assert(isinstance(new_pc, ExprInt))
         return new_pc, modified
 
     # Lift instruction to IR
     ircfg = lifter.new_ircfg()
     try:
         loc = lifter.add_instr_to_ircfg(instr, ircfg, None, False)
+        assert(isinstance(loc, Expr) or isinstance(loc, LocKey))
     except NotImplementedError as err:
         warn(f'[WARNING] Unable to lift instruction {instr}: {err}. Skipping.')
         return None, {}  # Create an empty transform for the instruction
 
     # Execute instruction symbolically
-    new_pc, modified = execute_location(loc, None)
+    new_pc, modified = execute_location(loc)
     modified[lifter.pc] = new_pc  # Add PC update to state
 
     return new_pc, modified
@@ -514,21 +580,22 @@ class _LLDBConcreteState(ReadableProgramState):
         except ConcreteMemoryError:
             raise MemoryAccessError(addr, size, 'Unable to read memory from LLDB.')
 
-def collect_symbolic_trace(binary: str,
-                           args: list[str],
+def collect_symbolic_trace(env: TraceEnvironment,
                            start_addr: int | None = None
-                           ) -> list[SymbolicTransform]:
+                           ) -> Trace[SymbolicTransform]:
     """Execute a program and compute state transformations between executed
     instructions.
 
     :param binary: The binary to trace.
     :param args:   Arguments to the program.
     """
+    binary = env.binary_name
+
     ctx = DisassemblyContext(binary)
     arch = ctx.arch
 
     # Set up concrete reference state
-    target = LLDBConcreteTarget(binary, args)
+    target = LLDBConcreteTarget(binary, env.argv, env.envp)
     if start_addr is not None:
         target.run_until(start_addr)
     lldb_state = _LLDBConcreteState(target, arch)
@@ -563,4 +630,4 @@ def collect_symbolic_trace(binary: str,
         # Step forward
         target.step()
 
-    return strace
+    return Trace(strace, env)

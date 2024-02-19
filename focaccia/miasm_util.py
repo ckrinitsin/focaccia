@@ -158,6 +158,7 @@ def _eval_exprmem(expr: ExprMem, state: MiasmSymbolResolver):
     if not addr.is_int():
         return expr
 
+    assert(isinstance(addr, ExprInt))
     mem = state.resolve_memory(int(addr), expr.size // 8)
     if mem is None:
         return expr

@@ -1,3 +1,5 @@
+import os
+
 import lldb
 
 from .arch import supported_architectures, x86
@@ -30,11 +32,21 @@ class ConcreteSectionError(Exception):
     pass
 
 class LLDBConcreteTarget:
-    def __init__(self, executable: str, argv: list[str] = []):
+    def __init__(self,
+                 executable: str,
+                 argv: list[str] = [],
+                 envp: list[str] | None = None):
         """Construct an LLDB concrete target. Stop at entry.
 
+        :param argv: List of arguements. Does NOT include the conventional
+                     executable name as the first entry.
+        :param envp: List of environment entries. Defaults to current
+                     `os.environ` if `None`.
         :raises RuntimeError: If the process is unable to launch.
         """
+        if envp is None:
+            envp = [f'{k}={v}' for k, v in os.environ.items()]
+
         self.debugger = lldb.SBDebugger.Create()
         self.debugger.SetAsync(False)
         self.target = self.debugger.CreateTargetWithFileAndArch(executable,
@@ -46,7 +58,7 @@ class LLDBConcreteTarget:
         self.error = lldb.SBError()
         self.listener = self.debugger.GetListener()
         self.process = self.target.Launch(self.listener,
-                                          argv, None,        # argv, envp
+                                          argv, envp,        # argv, envp
                                           None, None, None,  # stdin, stdout, stderr
                                           None,              # working directory
                                           0,
