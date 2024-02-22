@@ -203,9 +203,10 @@ def _eval_exprop(expr, state: MiasmSymbolResolver):
     # the CPUID instruction. Can't do this in an expression simplifier plugin
     # because the arguments must be concrete.
     if expr.op == 'x86_cpuid':
-        assert(len(args) == 2)
-        assert(isinstance(args[0], ExprInt) and isinstance(args[1], ExprInt))
-        return _eval_cpuid(args[0], args[1])
+        if args[0].is_int() and args[1].is_int():
+            assert(isinstance(args[0], ExprInt) and isinstance(args[1], ExprInt))
+            return _eval_cpuid(args[0], args[1])
+        return expr
 
     return ExprOp(expr.op, *args)
 
