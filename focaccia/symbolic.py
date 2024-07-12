@@ -17,7 +17,7 @@ from .arch import Arch, supported_architectures
 from .lldb_target import LLDBConcreteTarget, \
                          ConcreteRegisterError, \
                          ConcreteMemoryError
-from .miasm_util import MiasmSymbolResolver, eval_expr
+from .miasm_util import MiasmSymbolResolver, eval_expr, make_machine
 from .snapshot import ProgramState, ReadableProgramState, \
                       RegisterAccessError, MemoryAccessError
 from .trace import Trace, TraceEnvironment
@@ -80,7 +80,7 @@ class Instruction:
     @staticmethod
     def from_bytecode(asm: bytes, arch: Arch) -> Instruction:
         """Disassemble an instruction."""
-        machine = Machine(arch.archname)
+        machine = make_machine(arch)
         assert(machine.mn is not None)
         _instr = machine.mn.dis(asm, arch.ptr_size)
         return Instruction(_instr, machine, arch, None)
@@ -244,14 +244,15 @@ class SymbolicTransform:
         accessed_regs = set[str]()
 
         class RegisterCollector(MiasmSymbolResolver):
-            def __init__(self): pass
+            def __init__(self, arch: Arch):
+                self._arch = arch  # MiasmSymbolResolver needs this
             def resolve_register(self, regname: str) -> int | None:
                 accessed_regs.add(self._miasm_to_regname(regname))
                 return None
             def resolve_memory(self, addr: int, size: int): pass
             def resolve_location(self, loc): assert(False)
 
-        resolver = RegisterCollector()
+        resolver = RegisterCollector(self.arch)
         for expr in self.changed_regs.values():
             eval_expr(expr, resolver)
         for addr_expr, mem_expr in self.changed_mem.items():
@@ -340,7 +341,8 @@ class SymbolicTransform:
         for addr, expr in self.changed_mem.items():
             addr = eval_symbol(addr, conc_state)
             length = int(expr.size / 8)
-            res[addr] = eval_symbol(expr, conc_state).to_bytes(length, byteorder='big')
+            res[addr] = eval_symbol(expr, conc_state) \
+                        .to_bytes(length, byteorder=self.arch.endianness)
         return res
 
     @classmethod
@@ -352,8 +354,13 @@ class SymbolicTransform:
         from miasm.expression.parser import str_to_expr as parse
 
         def decode_inst(obj: Iterable[int], arch: Arch):
-            b = b''.join(i.to_bytes(1, byteorder='big') for i in obj)
-            return Instruction.from_bytecode(b, arch)
+            b = b''.join(i.to_bytes(1) for i in obj)
+            try:
+                return Instruction.from_bytecode(b, arch)
+            except Exception as err:
+                warn(f'[In SymbolicTransform.from_json] Unable to disassemble'
+                     f' bytes {obj}: {err}.')
+                return None
 
         arch = supported_architectures[data['arch']]
         start_addr = int(data['from_addr'])
@@ -362,7 +369,8 @@ class SymbolicTransform:
         t = SymbolicTransform({}, [], arch, start_addr, end_addr)
         t.changed_regs = { name: parse(val) for name, val in data['regs'].items() }
         t.changed_mem = { parse(addr): parse(val) for addr, val in data['mem'].items() }
-        t.instructions = [decode_inst(b, arch) for b in data['instructions']]
+        instrs = [decode_inst(b, arch) for b in data['instructions']]
+        t.instructions = [inst for inst in instrs if inst is not None]
 
         # Recover the instructions' address information
         addr = t.addr
@@ -375,13 +383,21 @@ class SymbolicTransform:
     def to_json(self) -> dict:
         """Serialize a symbolic transformation as a JSON object."""
         def encode_inst(inst: Instruction):
-            return [int(b) for b in inst.to_bytecode()]
+            try:
+                return [int(b) for b in inst.to_bytecode()]
+            except Exception as err:
+                warn(f'[In SymbolicTransform.to_json] Unable to assemble'
+                     f' "{inst}" to bytecode: {err}. This instruction will not'
+                     f' be serialized.')
+                return None
 
+        instrs = [encode_inst(inst) for inst in self.instructions]
+        instrs = [inst for inst in instrs if inst is not None]
         return {
             'arch': self.arch.archname,
             'from_addr': self.range[0],
             'to_addr': self.range[1],
-            'instructions': [encode_inst(inst) for inst in self.instructions],
+            'instructions': instrs,
             'regs': { name: repr(expr) for name, expr in self.changed_regs.items() },
             'mem': { repr(addr): repr(val) for addr, val in self.changed_mem.items() },
         }
@@ -554,24 +570,17 @@ class _LLDBConcreteState(ReadableProgramState):
     allows us instead to read values from LLDB on demand.
     """
     def __init__(self, target: LLDBConcreteTarget, arch: Arch):
+        super().__init__(arch)
         self._target = target
-        self._arch = arch
 
     def read_register(self, reg: str) -> int:
-        from focaccia.arch import x86
-
-        regname = self._arch.to_regname(reg)
+        regname = self.arch.to_regname(reg)
         if regname is None:
             raise RegisterAccessError(reg, f'Not a register name: {reg}')
 
         try:
             return self._target.read_register(regname)
         except ConcreteRegisterError:
-            # Special case for X86
-            if self._arch.archname == x86.archname:
-                rflags = x86.decompose_rflags(self._target.read_register('rflags'))
-                if regname in rflags:
-                    return rflags[regname]
             raise RegisterAccessError(regname, '')
 
     def read_memory(self, addr: int, size: int) -> bytes:

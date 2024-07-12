@@ -1,13 +1,17 @@
-from typing import Iterable
+from typing import Iterable, Literal
 
 class Arch():
+    Endianness = Literal['little', 'big']
+
     def __init__(self,
                  archname: str,
                  regnames: Iterable[str],
-                 ptr_size: int):
+                 ptr_size: int,
+                 endianness: Endianness = 'little'):
         self.archname = archname
         self.regnames = set(name.upper() for name in regnames)
         self.ptr_size = ptr_size
+        self.endianness: Literal['little', 'big'] = endianness
 
     def to_regname(self, name: str) -> str | None:
         """Transform a string into a standard register name.

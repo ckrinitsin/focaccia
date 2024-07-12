@@ -10,51 +10,86 @@ import gdb
 from typing import Iterable
 
 import focaccia.parser as parser
-from focaccia.arch import supported_architectures
+from focaccia.arch import supported_architectures, Arch
 from focaccia.compare import compare_symbolic
 from focaccia.snapshot import ProgramState, ReadableProgramState, \
                               RegisterAccessError, MemoryAccessError
 from focaccia.symbolic import SymbolicTransform, eval_symbol, ExprMem
 from focaccia.trace import Trace, TraceEnvironment
-from focaccia.utils import get_envp, print_result
+from focaccia.utils import print_result
 
 from verify_qemu import make_argparser, verbosity
 
 class GDBProgramState(ReadableProgramState):
-    def __init__(self, process: gdb.Inferior, frame: gdb.Frame):
+    from focaccia.arch import aarch64, x86
+
+    flag_register_names = {
+        aarch64.archname: 'cpsr',
+        x86.archname: 'eflags',
+    }
+
+    flag_register_decompose = {
+        aarch64.archname: aarch64.decompose_cpsr,
+        x86.archname: x86.decompose_rflags,
+    }
+
+    def __init__(self, process: gdb.Inferior, frame: gdb.Frame, arch: Arch):
+        super().__init__(arch)
         self._proc = process
         self._frame = frame
+
+    @staticmethod
+    def _read_vector_reg_aarch64(val, size) -> int:
+        return int(str(val['u']), 10)
+
+    @staticmethod
+    def _read_vector_reg_x86(val, size) -> int:
+        num_longs = size // 64
+        vals = val[f'v{num_longs}_int64']
+        res = 0
+        for i in range(num_longs):
+            val = int(vals[i].cast(gdb.lookup_type('unsigned long')))
+            res += val << i * 64
+        return res
+
+    read_vector_reg = {
+        aarch64.archname: _read_vector_reg_aarch64,
+        x86.archname: _read_vector_reg_x86,
+    }
 
     def read_register(self, reg: str) -> int:
         try:
             val = self._frame.read_register(reg.lower())
             size = val.type.sizeof * 8
 
-            # For vector registers, we have to assemble Python's
-            # arbitrary-length integers from GDB's fixed-size integers
-            # ourselves:
+            # For vector registers, we need to apply architecture-specific
+            # logic because GDB's interface is not consistent.
             if size > 64:  # Value is a vector
-                num_longs = size // 64
-                vals = val[f'v{num_longs}_int64']
-                res = 0
-                for i in range(num_longs):
-                    val = int(vals[i].cast(gdb.lookup_type('unsigned long')))
-                    res += val << i * 64
-                return res
+                if self.arch.archname not in self.read_vector_reg:
+                    raise NotImplementedError(
+                        f'Reading vector registers is not implemented for'
+                        f' architecture {self.arch.archname}.')
+                return self.read_vector_reg[self.arch.archname](val, size)
             # For non-vector values, just return the 64-bit value
             return int(val.cast(gdb.lookup_type('unsigned long')))
         except ValueError as err:
-            from focaccia.arch import x86
-            rflags = int(self._frame.read_register('eflags'))
-            rflags = x86.decompose_rflags(rflags)
-            if reg in rflags:
-                return rflags[reg]
-            raise RegisterAccessError(reg, str(err))
+            # Try to access the flags register with `reg` as a logical flag name
+            if self.arch.archname in self.flag_register_names:
+                flags_reg = self.flag_register_names[self.arch.archname]
+                flags = int(self._frame.read_register(flags_reg))
+                flags = self.flag_register_decompose[self.arch.archname](flags)
+                if reg in flags:
+                    return flags[reg]
+            raise RegisterAccessError(reg,
+                                      f'[GDB] Unable to access {reg}: {err}')
 
     def read_memory(self, addr: int, size: int) -> bytes:
         try:
             mem = self._proc.read_memory(addr, size).tobytes()
-            return bytes(reversed(mem))  # Convert to big endian
+            if self.arch.endianness == 'little':
+                return mem
+            else:
+                return bytes(reversed(mem))  # Convert to big endian
         except gdb.MemoryError as err:
             raise MemoryAccessError(addr, size, str(err))
 
@@ -87,7 +122,7 @@ class GDBServerStateIterator:
         # i.e. before stepping the first time
         if self._first_next:
             self._first_next = False
-            return GDBProgramState(self._process, gdb.selected_frame())
+            return GDBProgramState(self._process, gdb.selected_frame(), self.arch)
 
         # Step
         pc = gdb.selected_frame().read_register('pc')
@@ -98,7 +133,7 @@ class GDBServerStateIterator:
                 raise StopIteration
             new_pc = gdb.selected_frame().read_register('pc')
 
-        return GDBProgramState(self._process, gdb.selected_frame())
+        return GDBProgramState(self._process, gdb.selected_frame(), self.arch)
 
 def record_minimal_snapshot(prev_state: ReadableProgramState,
                             cur_state: ReadableProgramState,
@@ -140,8 +175,8 @@ def record_minimal_snapshot(prev_state: ReadableProgramState,
                            resolved relative to this state.
         """
         for regname in regs:
-            regval = cur_state.read_register(regname)
             try:
+                regval = cur_state.read_register(regname)
                 out_state.set_register(regname, regval)
             except RegisterAccessError:
                 pass

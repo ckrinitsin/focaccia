@@ -2,7 +2,7 @@ import os
 
 import lldb
 
-from .arch import supported_architectures, x86
+from .arch import supported_architectures
 from .snapshot import ProgramState
 
 class MemoryMap:
@@ -32,6 +32,18 @@ class ConcreteSectionError(Exception):
     pass
 
 class LLDBConcreteTarget:
+    from focaccia.arch import aarch64, x86
+
+    flag_register_names = {
+        aarch64.archname: 'cpsr',
+        x86.archname: 'rflags',
+    }
+
+    flag_register_decompose = {
+        aarch64.archname: aarch64.decompose_cpsr,
+        x86.archname: x86.decompose_rflags,
+    }
+
     def __init__(self,
                  executable: str,
                  argv: list[str] = [],
@@ -67,7 +79,14 @@ class LLDBConcreteTarget:
             raise RuntimeError(f'[In LLDBConcreteTarget.__init__]: Failed to'
                                f' launch process.')
 
+        # Determine current arch
         self.archname = self.target.GetPlatform().GetTriple().split('-')[0]
+        if self.archname not in supported_architectures:
+            err = f'LLDBConcreteTarget: Architecture {self.archname} is not' \
+                  f' supported by Focaccia.'
+            print(f'[ERROR] {err}')
+            raise NotImplementedError(err)
+        self.arch = supported_architectures[self.archname]
 
     def is_exited(self):
         """Signals whether the concrete process has exited.
@@ -99,28 +118,17 @@ class LLDBConcreteTarget:
 
     def record_snapshot(self) -> ProgramState:
         """Record the concrete target's state in a ProgramState object."""
-        # Determine current arch
-        if self.archname not in supported_architectures:
-            print(f'[ERROR] LLDBConcreteTarget: Recording snapshots is not'
-                  f' supported for architecture {self.archname}!')
-            raise NotImplementedError()
-        arch = supported_architectures[self.archname]
-
-        state = ProgramState(arch)
+        state = ProgramState(self.arch)
 
         # Query and store register state
-        for regname in arch.regnames:
+        for regname in self.arch.regnames:
             try:
                 conc_val = self.read_register(regname)
                 state.set_register(regname, conc_val)
             except KeyError:
                 pass
             except ConcreteRegisterError:
-                # Special rule for flags on X86
-                if arch.archname == x86.archname:
-                    rflags = x86.decompose_rflags(self.read_register('rflags'))
-                    if regname in rflags:
-                        state.set_register(regname, rflags[regname])
+                pass
 
         # Query and store memory state
         for mapping in self.get_mappings():
@@ -142,11 +150,34 @@ class LLDBConcreteTarget:
         """
         frame = self.process.GetThreadAtIndex(0).GetFrameAtIndex(0)
         reg = frame.FindRegister(regname)
-        if reg is None:
+        if not reg.IsValid():
             raise ConcreteRegisterError(
                 f'[In LLDBConcreteTarget._get_register]: Register {regname}'
                 f' not found.')
         return reg
+
+    def read_flags(self) -> dict[str, int | bool]:
+        """Read the current state flags.
+
+        If the concrete target's architecture has state flags, read and return
+        their current values.
+
+        This handles the conversion from implementation details like flags
+        registers to the logical flag values. For example: On X86, this reads
+        the RFLAGS register and extracts the flag bits from its value.
+
+        :return: Dictionary mapping flag names to values. The values may be
+                 booleans in the case of true binary flags or integers in the
+                 case of multi-byte flags. Is empty if the current architecture
+                 does not have state flags of the access is not implemented for
+                 it.
+        """
+        if self.archname not in self.flag_register_names:
+            return {}
+
+        flags_reg = self.flag_register_names[self.archname]
+        flags_val = self._get_register(flags_reg).GetValueAsUnsigned()
+        return self.flag_register_decompose[self.archname](flags_val)
 
     def read_register(self, regname: str) -> int:
         """Read the value of a register.
@@ -155,14 +186,17 @@ class LLDBConcreteTarget:
                                       or the target is otherwise unable to read
                                       the register's value.
         """
-        reg = self._get_register(regname)
-        val = reg.GetValue()
-        if val is None:
+        try:
+            reg = self._get_register(regname)
+            assert(reg.IsValid())
+            return reg.GetValueAsUnsigned()
+        except ConcreteRegisterError as err:
+            flags = self.read_flags()
+            if regname in flags:
+                return flags[regname]
             raise ConcreteRegisterError(
-                f'[In LLDBConcreteTarget.read_register]: Register has an'
-                f' invalid value of {val}.')
-
-        return int(val, 16)
+                f'[In LLDBConcreteTarget.read_register]: Unable to read'
+                f' register {regname}: {err}')
 
     def write_register(self, regname: str, value: int):
         """Read the value of a register.
@@ -189,7 +223,10 @@ class LLDBConcreteTarget:
         if not err.success:
             raise ConcreteMemoryError(f'Error when reading {size} bytes at'
                                       f' address {hex(addr)}: {err}')
-        return bytes(reversed(content))  # Convert to big endian
+        if self.arch.endianness == 'little':
+            return content
+        else:
+            return bytes(reversed(content))
 
     def write_memory(self, addr, value: bytes):
         """Write bytes to memory.

@@ -1,13 +1,25 @@
 from typing import Callable
 
+from miasm.analysis.machine import Machine
 from miasm.core.locationdb import LocationDB, LocKey
 from miasm.expression.expression import Expr, ExprOp, ExprId, ExprLoc, \
                                         ExprInt, ExprMem, ExprCompose, \
                                         ExprSlice, ExprCond
 from miasm.expression.simplifications import expr_simp_explicit
 
+from . import arch
+from .arch import Arch
 from .snapshot import ReadableProgramState, \
                       RegisterAccessError, MemoryAccessError
+
+def make_machine(_arch: Arch) -> Machine:
+    """Create a Miasm `Machine` object corresponding to an `Arch`."""
+    machines = {
+        arch.x86.archname: lambda _: Machine('x86_64'),
+        # Miasm only has ARM machine names with the l/b suffix:
+        arch.aarch64.archname: lambda a: Machine(f'aarch64{a.endianness[0]}'),
+    }
+    return machines[_arch.archname](_arch)
 
 def simp_segm(expr_simp, expr: ExprOp):
     """Simplify a segmentation expression to an addition of the segment
@@ -60,27 +72,50 @@ class MiasmSymbolResolver:
     """Resolves atomic symbols to some state."""
 
     miasm_flag_aliases = {
-        'NF':     'SF',
-        'I_F':    'IF',
-        'IOPL_F': 'IOPL',
-        'I_D':    'ID',
+        arch.x86.archname: {
+            'NF':     'SF',
+            'I_F':    'IF',
+            'IOPL_F': 'IOPL',
+            'I_D':    'ID',
+        },
+        arch.aarch64.archname: {
+            'NF': 'N',
+            'SF': 'N',
+            'ZF': 'Z',
+            'CF': 'C',
+            'VF': 'V',
+            'OF': 'V',
+            'QF': 'Q',
+
+            'AF': 'A',
+            'EF': 'E',
+            'IF': 'I',
+            'FF': 'F',
+        }
     }
 
-    def __init__(self, state: ReadableProgramState, loc_db: LocationDB):
+    def __init__(self,
+                 state: ReadableProgramState,
+                 loc_db: LocationDB):
         self._state = state
         self._loc_db = loc_db
+        self._arch = state.arch
+        self.endianness: Arch.Endianness = self._arch.endianness
 
-    @staticmethod
-    def _miasm_to_regname(regname: str) -> str:
+    def _miasm_to_regname(self, regname: str) -> str:
         """Convert a register name as used by Miasm to one that follows
         Focaccia's naming conventions."""
         regname = regname.upper()
-        return MiasmSymbolResolver.miasm_flag_aliases.get(regname, regname)
+        if self._arch.archname in self.miasm_flag_aliases:
+            aliases = self.miasm_flag_aliases[self._arch.archname]
+            return aliases.get(regname, regname)
+        return regname
 
     def resolve_register(self, regname: str) -> int | None:
         try:
             return self._state.read_register(self._miasm_to_regname(regname))
-        except RegisterAccessError:
+        except RegisterAccessError as err:
+            print(f'Not a register: {regname} ({err})')
             return None
 
     def resolve_memory(self, addr: int, size: int) -> bytes | None:
@@ -164,7 +199,7 @@ def _eval_exprmem(expr: ExprMem, state: MiasmSymbolResolver):
         return expr
 
     assert(len(mem) * 8 == expr.size)
-    return ExprInt(int.from_bytes(mem, byteorder='big'), expr.size)
+    return ExprInt(int.from_bytes(mem, byteorder=state.endianness), expr.size)
 
 def _eval_exprcond(expr, state: MiasmSymbolResolver):
     """Evaluate an ExprCond using the current state"""

@@ -34,7 +34,7 @@ The `tools/` directory contains additional utility scripts to work with focaccia
 
 ## Project Overview (for developers)
 
-### Snapshot-comparison framework
+### Snapshots and comparison
 
 The following files belong to a rough framework for the snapshot comparison engine:
 
@@ -43,8 +43,7 @@ representation of program snapshots.
 
  - `focaccia/compare.py`: The central algorithms that work on snapshots.
 
- - `focaccia/arch/`: Abstractions over different processor architectures. Will be used to integrate support for more
-architectures later. Currently, we only have X86.
+ - `focaccia/arch/`: Abstractions over different processor architectures. Currently we have x86 and aarch64.
 
 ### Concolic execution
 
@@ -67,4 +66,18 @@ our own log format.
 
  - `focaccia/match.py`: Algorithms for trace matching.
 
- - `miasm_test.py`: A test script that traces a program concolically.
+### Supporting new architectures
+
+To add support for an architecture <arch>, do the following:
+
+ - Add a file `focaccia/arch/<arch>.py`. This module declares the architecture's description, such as register names and
+an architecture class. The convention is to declare state flags (e.g. flags in RFLAGS for x86) as separate registers.
+
+ - Add the class to the `supported_architectures` dict in `focaccia/arch/__init__.py`.
+
+ - Depending on Miasm's support for <arch>, add register name aliases to the `MiasmSymbolResolver.miasm_flag_aliases`
+dict in `focaccia/miasm_util.py`.
+
+ - Depending on the existence of a flags register in <arch>, implement conversion from the flags register's value to
+values of single logical flags (e.g. implement the operation `RFLAGS['OF']`) in the respective concrete targets (LLDB,
+GDB, ...).

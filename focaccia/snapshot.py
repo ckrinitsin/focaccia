@@ -80,7 +80,9 @@ class SparseMemory:
         assert(len(data) == offset)  # Exactly all data was written
 
 class ReadableProgramState:
-    """Interface for read-only program states. Used for typing purposes."""
+    """Interface for read-only program states."""
+    def __init__(self, arch: Arch):
+        self.arch = arch
 
     def read_register(self, reg: str) -> int:
         """Read a register's value.
@@ -106,7 +108,7 @@ class ReadableProgramState:
 class ProgramState(ReadableProgramState):
     """A snapshot of the program's state."""
     def __init__(self, arch: Arch):
-        self.arch = arch
+        super().__init__(arch=arch)
 
         self.regs: dict[str, int | None] = {reg: None for reg in arch.regnames}
         self.mem = SparseMemory()
