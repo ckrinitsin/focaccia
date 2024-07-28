@@ -22,7 +22,11 @@ from .snapshot import ProgramState, ReadableProgramState, \
                       RegisterAccessError, MemoryAccessError
 from .trace import Trace, TraceEnvironment
 
-warn = logging.warning
+logger = logging.getLogger('focaccia-symbolic')
+warn = logger.warn
+
+# Disable Miasm's disassembly logger
+logging.getLogger('asmblock').setLevel(logging.CRITICAL)
 
 def eval_symbol(symbol: Expr, conc_state: ReadableProgramState) -> int:
     """Evaluate a symbol based on a concrete reference state.
@@ -619,8 +623,8 @@ def collect_symbolic_trace(env: TraceEnvironment,
             instr = ctx.mdis.dis_instr(pc)
         except:
             err = sys.exc_info()[1]
-            warn(f'[WARNING] Unable to disassemble instruction at {hex(pc)}:'
-                 f' {err}. Skipping.')
+            warn(f'Unable to disassemble instruction at {hex(pc)}: {err}.'
+                 f' Skipping.')
             target.step()
             continue
 
