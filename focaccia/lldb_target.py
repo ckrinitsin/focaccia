@@ -189,6 +189,13 @@ class LLDBConcreteTarget:
         try:
             reg = self._get_register(regname)
             assert(reg.IsValid())
+            if reg.size > 8:  # reg is a vector register
+                reg.data.byte_order = lldb.eByteOrderLittle
+                val = 0
+                for ui64 in reversed(reg.data.uint64s):
+                    val <<= 64
+                    val |= ui64
+                return val
             return reg.GetValueAsUnsigned()
         except ConcreteRegisterError as err:
             flags = self.read_flags()

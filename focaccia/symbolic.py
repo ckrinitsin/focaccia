@@ -420,26 +420,32 @@ class SymbolicTransform:
 
         return res[:-1]  # Remove trailing newline
 
+class MemoryBinstream:
+    """A binary stream interface that reads bytes from a program state's
+    memory."""
+    def __init__(self, state: ReadableProgramState):
+        self._state = state
+
+    def __len__(self):
+        return 0xffffffff
+
+    def __getitem__(self, key: int | slice):
+        if isinstance(key, slice):
+            return self._state.read_memory(key.start, key.stop - key.start)
+        return self._state.read_memory(key, 1)
+
 class DisassemblyContext:
-    def __init__(self, binary):
+    def __init__(self, target: ReadableProgramState):
         self.loc_db = LocationDB()
 
-        # Load the binary
-        with open(binary, 'rb') as bin_file:
-            cont = ContainerELF.from_stream(bin_file, self.loc_db)
-        self.entry_point = cont.entry_point
-
         # Determine the binary's architecture
-        self.machine = Machine(cont.arch)
-        if self.machine.name not in supported_architectures:
-            raise NotImplementedError(f'[ERROR] {self.machine.name} is not'
-                                      f' supported.')
-        self.arch = supported_architectures[self.machine.name]
-        """Focaccia's description of an instruction set architecture."""
+        self.machine = make_machine(target.arch)
+        self.arch = target.arch
 
         # Create disassembly/lifting context
         assert(self.machine.dis_engine is not None)
-        self.mdis = self.machine.dis_engine(cont.bin_stream, loc_db=self.loc_db)
+        binstream = MemoryBinstream(target)
+        self.mdis = self.machine.dis_engine(binstream, loc_db=self.loc_db)
         self.mdis.follow_call = True
         self.lifter = self.machine.lifter(self.loc_db)
 
@@ -573,8 +579,8 @@ class _LLDBConcreteState(ReadableProgramState):
     target. This saves us the trouble of recording a full program state, and
     allows us instead to read values from LLDB on demand.
     """
-    def __init__(self, target: LLDBConcreteTarget, arch: Arch):
-        super().__init__(arch)
+    def __init__(self, target: LLDBConcreteTarget):
+        super().__init__(target.arch)
         self._target = target
 
     def read_register(self, reg: str) -> int:
@@ -604,14 +610,14 @@ def collect_symbolic_trace(env: TraceEnvironment,
     """
     binary = env.binary_name
 
-    ctx = DisassemblyContext(binary)
-    arch = ctx.arch
-
     # Set up concrete reference state
     target = LLDBConcreteTarget(binary, env.argv, env.envp)
     if start_addr is not None:
         target.run_until(start_addr)
-    lldb_state = _LLDBConcreteState(target, arch)
+    lldb_state = _LLDBConcreteState(target)
+
+    ctx = DisassemblyContext(lldb_state)
+    arch = ctx.arch
 
     # Trace concolically
     strace: list[SymbolicTransform] = []
