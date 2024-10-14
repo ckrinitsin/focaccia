@@ -119,30 +119,40 @@ class ProgramState(ReadableProgramState):
         :raise RegisterAccessError: If `reg` is not a register name, or if the
                                     register has no value.
         """
-        regname = self.arch.to_regname(reg)
-        if regname is None:
+        acc = self.arch.get_reg_accessor(reg)
+        if acc is None:
             raise RegisterAccessError(reg, f'Not a register name: {reg}')
 
-        assert(regname in self.regs)
-        regval = self.regs[regname]
+        assert(acc.base_reg in self.regs)
+        regval = self.regs[acc.base_reg]
         if regval is None:
             raise RegisterAccessError(
-                regname,
+                acc.base_reg,
                 f'[In ProgramState.read_register]: Unable to read value of'
-                f' register {reg} (a.k.a. {regname}): The register is not set.'
+                f' register {reg} (a.k.a. {acc}): The register is not set.'
                 f' Full state: {self}')
-        return regval
+
+        return (regval & acc.mask) >> acc.start
 
     def set_register(self, reg: str, value: int):
         """Assign a value to a register.
 
         :raise RegisterAccessError: If `reg` is not a register name.
         """
-        regname = self.arch.to_regname(reg)
-        if regname is None:
+        acc = self.arch.get_reg_accessor(reg)
+        if acc is None:
             raise RegisterAccessError(reg, f'Not a register name: {reg}')
 
-        self.regs[regname] = value
+        assert(acc.base_reg in self.regs)
+        base_reg_size = self.arch.get_reg_accessor(acc.base_reg).num_bits
+
+        val = self.regs[acc.base_reg]
+        if val is None:
+            val = 0
+        val &= (~acc.mask & ((1 << base_reg_size) - 1))    # Clear bits in range
+        val |= (value << acc.start) & acc.mask         # Set bits in range
+
+        self.regs[acc.base_reg] = val
 
     def read_memory(self, addr: int, size: int) -> bytes:
         """Read a number of bytes from memory.

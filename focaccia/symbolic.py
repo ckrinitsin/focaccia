@@ -89,6 +89,15 @@ class Instruction:
         _instr = machine.mn.dis(asm, arch.ptr_size)
         return Instruction(_instr, machine, arch, None)
 
+    @staticmethod
+    def from_string(s: str, arch: Arch, offset: int = 0, length: int = 0) -> Instruction:
+        machine = make_machine(arch)
+        assert(machine.mn is not None)
+        _instr = machine.mn.fromstring(s, LocationDB(), arch.ptr_size)
+        _instr.offset = offset
+        _instr.l = length
+        return Instruction(_instr, machine, arch, None)
+
     def to_bytecode(self) -> bytes:
         """Assemble the instruction to byte code."""
         assert(self.machine.mn is not None)
@@ -312,7 +321,7 @@ class SymbolicTransform:
 
         return list(accessed_mem)
 
-    def eval_register_transforms(self, conc_state: ProgramState) \
+    def eval_register_transforms(self, conc_state: ReadableProgramState) \
             -> dict[str, int]:
         """Calculate register transformations when applied to a concrete state.
 
@@ -329,7 +338,7 @@ class SymbolicTransform:
             res[regname] = eval_symbol(expr, conc_state)
         return res
 
-    def eval_memory_transforms(self, conc_state: ProgramState) \
+    def eval_memory_transforms(self, conc_state: ReadableProgramState) \
             -> dict[int, bytes]:
         """Calculate memory transformations when applied to a concrete state.
 
@@ -357,13 +366,13 @@ class SymbolicTransform:
         """
         from miasm.expression.parser import str_to_expr as parse
 
-        def decode_inst(obj: Iterable[int], arch: Arch):
-            b = b''.join(i.to_bytes(1) for i in obj)
+        def decode_inst(obj: list, arch: Arch):
+            length, text = obj
             try:
-                return Instruction.from_bytecode(b, arch)
+                return Instruction.from_string(text, arch, offset=0, length=length)
             except Exception as err:
-                warn(f'[In SymbolicTransform.from_json] Unable to disassemble'
-                     f' bytes {obj}: {err}.')
+                warn(f'[In SymbolicTransform.from_json] Unable to parse'
+                     f' instruction string "{text}": {err}.')
                 return None
 
         arch = supported_architectures[data['arch']]
@@ -388,10 +397,10 @@ class SymbolicTransform:
         """Serialize a symbolic transformation as a JSON object."""
         def encode_inst(inst: Instruction):
             try:
-                return [int(b) for b in inst.to_bytecode()]
+                return [inst.length, inst.to_string()]
             except Exception as err:
-                warn(f'[In SymbolicTransform.to_json] Unable to assemble'
-                     f' "{inst}" to bytecode: {err}. This instruction will not'
+                warn(f'[In SymbolicTransform.to_json] Unable to serialize'
+                     f' "{inst}" as string: {err}. This instruction will not'
                      f' be serialized.')
                 return None
 
@@ -644,9 +653,40 @@ def collect_symbolic_trace(env: TraceEnvironment,
             new_pc = pc + instruction.length
         else:
             new_pc = int(new_pc)
-        strace.append(SymbolicTransform(modified, [instruction], arch, pc, new_pc))
+        transform = SymbolicTransform(modified, [instruction], arch, pc, new_pc)
+        strace.append(transform)
+
+        # Predict next concrete state.
+        # We verify the symbolic execution backend on the fly for some
+        # additional protection from bugs in the backend.
+        predicted_regs = transform.eval_register_transforms(lldb_state)
+        predicted_mems = transform.eval_memory_transforms(lldb_state)
 
         # Step forward
         target.step()
+        if target.is_exited():
+            break
+
+        # Verify last generated transform by comparing concrete state against
+        # predicted values.
+        assert(len(strace) > 0)
+        for reg, val in predicted_regs.items():
+            conc_val = lldb_state.read_register(reg)
+            if conc_val != val:
+                warn(f'Symbolic execution backend generated false equation for'
+                     f' [{hex(instruction.addr)}]: {instruction}:'
+                     f' Predicted {reg} = {hex(val)}, but the'
+                     f' concrete state has value {reg} = {hex(conc_val)}.'
+                     f'\nFaulty transformation: {transform}')
+        for addr, data in predicted_mems.items():
+            conc_data = lldb_state.read_memory(addr, len(data))
+            if conc_data != data:
+                warn(f'Symbolic execution backend generated false equation for'
+                     f' [{hex(instruction.addr)}]: {instruction}: Predicted'
+                     f' mem[{hex(addr)}:{hex(addr+len(data))}] = {data},'
+                     f' but the concrete state has value'
+                     f' mem[{hex(addr)}:{hex(addr+len(data))}] = {conc_data}.'
+                     f'\nFaulty transformation: {transform}')
+                raise Exception()
 
     return Trace(strace, env)

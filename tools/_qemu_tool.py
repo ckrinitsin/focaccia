@@ -58,18 +58,23 @@ class GDBProgramState(ReadableProgramState):
     }
 
     def read_register(self, reg: str) -> int:
+        if reg == 'RFLAGS':
+            reg = 'EFLAGS'
+
         try:
             val = self._frame.read_register(reg.lower())
             size = val.type.sizeof * 8
 
             # For vector registers, we need to apply architecture-specific
             # logic because GDB's interface is not consistent.
-            if size > 64:  # Value is a vector
+            if size >= 128:  # Value is a vector
                 if self.arch.archname not in self.read_vector_reg:
                     raise NotImplementedError(
                         f'Reading vector registers is not implemented for'
                         f' architecture {self.arch.archname}.')
                 return self.read_vector_reg[self.arch.archname](val, size)
+            elif size < 64:
+                return int(val.cast(gdb.lookup_type('unsigned int')))
             # For non-vector values, just return the 64-bit value
             return int(val.cast(gdb.lookup_type('unsigned long')))
         except ValueError as err:
