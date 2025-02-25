@@ -3,9 +3,16 @@ build*
 *.md
 *.out
 *.txt
+!requirements.txt
 *.bin
 *.dot
 build*/
 out-*/
-__pycache__/*
+__pycache__/
 
+# Dev environment
+.gdbinit
+
+# Focaccia files
+qemu.sym
+qemu.trace
