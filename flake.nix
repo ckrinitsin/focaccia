@@ -4,6 +4,8 @@
 	inputs = {
 		nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
+		flake-utils.url = "github:numtide/flake-utils";
+
 		pyproject-nix = {
 			url = "github:pyproject-nix/pyproject.nix";
 			inputs.nixpkgs.follows = "nixpkgs";
@@ -27,14 +29,13 @@
 		self,
 		uv2nix,
 		nixpkgs,
+		flake-utils,
 		pyproject-nix,
 		pyproject-build-systems,
 		...
 	}:
+	flake-utils.lib.eachDefaultSystem (system:
 	let
-		# Define system arch
-		system = "aarch64-darwin";
-
 		# Refine nixpkgs used in flake to system arch
 		pkgs = import nixpkgs {
 			inherit system;
@@ -59,7 +60,7 @@
 			miasm = super.miasm.overrideAttrs (old: {
 				nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ self.setuptools ];
 			});
-			python-cpuid = super.python-cpuid.overrideAttrs (old: {
+			"python-cpuid" = super."python-cpuid".overrideAttrs (old: {
 				nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ 
 					self.setuptools
 					pkgs.clang
@@ -83,12 +84,12 @@
 		 # Create a Python venv with the default dependency group
 		 pythonEnv = pythonSet.mkVirtualEnv "focaccia-env" workspace.deps.default;
 	in {
-		packages.aarch64-darwin.default = pythonEnv;
+		packages.default = pythonEnv;
 
-		apps.aarch64-darwin.default = {
+		apps.default = {
 			type = "app";
-			program = "${self.packages.aarch64-darwin.default}/bin/focaccia";
+			program = "${self.packages.default}/bin/focaccia";
 		};
-	};
+	});
 }
 
