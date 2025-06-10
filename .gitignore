@@ -16,3 +16,7 @@ __pycache__/
 # Focaccia files
 qemu.sym
 qemu.trace
+
+# Nix
+result
+
