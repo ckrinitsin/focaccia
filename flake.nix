@@ -84,11 +84,21 @@
 		 # Create a Python venv with the default dependency group
 		 pythonEnv = pythonSet.mkVirtualEnv "focaccia-env" workspace.deps.default;
 	in {
+		# Default package just builds Focaccia
 		packages.default = pythonEnv;
 
+		# Default app is just Focaccia
 		apps.default = {
 			type = "app";
 			program = "${self.packages.default}/bin/focaccia";
+		};
+
+		# Developer shell that includes Focaccia and QEMU
+		devShells.default = pkgs.mkShell {
+			packages = [
+				pythonEnv
+				pkgs.qemu
+			];
 		};
 	});
 }
