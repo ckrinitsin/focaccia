@@ -1,0 +1,73 @@
+version = 1
+revision = 2
+requires-python = "==3.12.*"
+
+[[package]]
+name = "cpuid"
+version = "1.0"
+source = { directory = "wrappers/cpuid-wrapper" }
+
+[[package]]
+name = "focaccia"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "cpuid" },
+    { name = "lldb-python" },
+    { name = "miasm" },
+    { name = "setuptools" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cpuid", directory = "wrappers/cpuid-wrapper" },
+    { name = "lldb-python" },
+    { name = "miasm" },
+    { name = "setuptools" },
+]
+
+[[package]]
+name = "future"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a7/b2/4140c69c6a66432916b26158687e821ba631a4c9273c474343badf84d3ba/future-1.0.0.tar.gz", hash = "sha256:bd2968309307861edae1458a4f8a4f3598c03be43b97521076aebf5d94c07b05", size = 1228490, upload-time = "2024-02-21T11:52:38.461Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/da/71/ae30dadffc90b9006d77af76b393cb9dfbfc9629f339fc1574a1c52e6806/future-1.0.0-py3-none-any.whl", hash = "sha256:929292d34f5872e70396626ef385ec22355a1fae8ad29e1a734c3e43f9fbc216", size = 491326, upload-time = "2024-02-21T11:52:35.956Z" },
+]
+
+[[package]]
+name = "lldb-python"
+version = "19.0.0.dev1"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5c/c2/072fb4010fe1007b12759170469a1511aa5eeb0e8748531d7c7e6bb56e20/lldb_python-19.0.0.dev1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:d52209a57d4fed341fac63ca137a0c52fead1d5a48fd88e412643ea616b94b9b", size = 38533603, upload-time = "2024-04-24T10:35:47.259Z" },
+    { url = "https://files.pythonhosted.org/packages/67/c7/3b273318f362a850e0aaefa03996901307e0f520196874dba6164b7df65f/lldb_python-19.0.0.dev1-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:5ee902f27544cd67eb12c135e65b9a11b4c1d59a0ce156fb1480e90a2f621ac4", size = 52213200, upload-time = "2024-04-24T10:35:51.163Z" },
+]
+
+[[package]]
+name = "miasm"
+version = "0.1.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "future" },
+    { name = "pyparsing" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9d/53/706e9d24936f53dace112f01130c6e46773551dd19cfd6118c1b35fbb836/miasm-0.1.5.tar.gz", hash = "sha256:e90d5886cdff7601747e8c6ae0e874356436d848e5be2a44642de9d29762dc75", size = 618342, upload-time = "2023-04-18T21:29:15.47Z" }
+
+[[package]]
+name = "pyparsing"
+version = "2.4.7"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c1/47/dfc9c342c9842bbe0036c7f763d2d6686bcf5eb1808ba3e170afdb282210/pyparsing-2.4.7.tar.gz", hash = "sha256:c203ec8783bf771a155b207279b9bccb8dea02d8f0c9e5f8ead507bc3246ecc1", size = 649718, upload-time = "2020-04-05T22:21:25.349Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8a/bb/488841f56197b13700afd5658fc279a2025a39e22449b7cf29864669b15d/pyparsing-2.4.7-py2.py3-none-any.whl", hash = "sha256:ef9d7589ef3c200abe66653d3f1ab1033c3c419ae9b9bdb1240a85b024efc88b", size = 67842, upload-time = "2020-04-05T22:21:22.897Z" },
+]
+
+[[package]]
+name = "setuptools"
+version = "80.9.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/18/5d/3bf57dcd21979b887f014ea83c24ae194cfcd12b9e0fda66b957c69d1fca/setuptools-80.9.0.tar.gz", hash = "sha256:f36b47402ecde768dbfafc46e8e4207b4360c654f1f3bb84475f0a28628fb19c", size = 1319958, upload-time = "2025-05-27T00:56:51.443Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a3/dc/17031897dae0efacfea57dfd3a82fdd2a2aeb58e0ff71b77b87e44edc772/setuptools-80.9.0-py3-none-any.whl", hash = "sha256:062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922", size = 1201486, upload-time = "2025-05-27T00:56:49.664Z" },
+]

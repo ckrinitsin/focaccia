@@ -1,0 +1,32 @@
+[project]
+name = "focaccia"
+version = "0.1.0"
+requires-python = "==3.12.*"
+description = "Symbolic Tester for QEMU"
+readme = {file = "README.md", content-type = "text/markdown"}
+authors = [
+	{name = "Theofilos Augoustis", email = "theofilos.augoustis@gmail.com"},
+	{name = "Sebastian Reimers", email="sebastian.reimers@in.tum.de"},
+	{name = "Nicola Crivellin", email="nicola.crivellin98@gmail.com"},
+	{name = "Alp Berkman", email="alpberkman@gmail.com"}
+]
+dependencies = [
+	"cpuid",
+	"miasm",
+	"setuptools",
+	"lldb-python",
+]
+
+[project.scripts]
+focaccia = "focaccia:cli.main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.uv.sources]
+cpuid = { path = "wrappers/cpuid-wrapper", editable = false }
+

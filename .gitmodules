@@ -1,3 +1,6 @@
 [submodule "cpuid"]
-	path = cpuid
+	path = wrappers/cpuid
 	url = https://github.com/flababah/cpuid.py.git
+[submodule "wrappers/cpuid-wrapper/cpuid"]
+	path = wrappers/cpuid-wrapper/cpuid
+	url = https://github.com/flababah/cpuid.py
