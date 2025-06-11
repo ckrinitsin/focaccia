@@ -4,6 +4,8 @@
 	inputs = {
 		nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
+		nixpkgs-qemu-60.url = "github:nixos/nixpkgs/f8f124009497b3f9908f395d2533a990feee1de8";
+
 		flake-utils.url = "github:numtide/flake-utils";
 
 		pyproject-nix = {
@@ -25,7 +27,7 @@
 		};
 	};
 
-	outputs = {
+	outputs = inputs@{
 		self,
 		uv2nix,
 		nixpkgs,
@@ -36,6 +38,8 @@
 	}:
 	flake-utils.lib.eachDefaultSystem (system:
 	let
+		qemu-60 = inputs.nixpkgs-qemu-60.qemu;
+
 		# Refine nixpkgs used in flake to system arch
 		pkgs = import nixpkgs {
 			inherit system;
@@ -94,11 +98,20 @@
 		};
 
 		# Developer shell that includes Focaccia and QEMU
-		devShells.default = pkgs.mkShell {
-			packages = [
-				pythonEnv
-				pkgs.qemu
-			];
+		devShells = {
+			default = pkgs.mkShell {
+				packages = [
+					pythonEnv
+					pkgs.qemu-user
+				];
+			};
+
+			qemu-60 = pkgs.mkShell {
+				packages = [
+					pythonEnv
+					qemu-60
+				];
+			};
 		};
 	});
 }
