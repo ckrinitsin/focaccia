@@ -45,6 +45,13 @@
 			inherit system;
 		};
 
+		musl-pkgs = import nixpkgs {
+			inherit system;
+			crossSystem = {
+				config = "x86_64-unknown-linux-musl";
+			};
+		};
+
 		# Pin Python version
 		python = pkgs.python312;
 
@@ -103,6 +110,9 @@
 				packages = [
 					pythonEnv
 					pkgs.qemu-user
+					musl-pkgs.gcc
+					musl-pkgs.pkg-config
+					pkgs.gdb
 				];
 			};
 
@@ -110,6 +120,9 @@
 				packages = [
 					pythonEnv
 					qemu-60
+					musl-pkgs.gcc
+					musl-pkgs.pkg-config
+					pkgs.gdb
 				];
 			};
 		};
