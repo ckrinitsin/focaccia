@@ -14,8 +14,8 @@ __pycache__/
 .gdbinit
 
 # Focaccia files
-qemu.sym
-qemu.trace
+*.sym
+*.trace
 
 # Nix
 result
