@@ -110,9 +110,9 @@
 				packages = [
 					pythonEnv
 					pkgs.qemu-user
-					musl-pkgs.gcc
-					musl-pkgs.pkg-config
 					pkgs.gdb
+					pkgs.gcc
+					pkgs.glibc.all
 				];
 			};
 
