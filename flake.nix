@@ -116,6 +116,15 @@
 				];
 			};
 
+			glibc = pkgs.mkShell {
+				packages = [
+					pythonDevEnv
+					pkgs.gdb
+					pkgs.gcc
+					pkgs.glibc.all
+				];
+			};
+
 			musl = pkgs.mkShell {
 				packages = [
 					pythonDevEnv
