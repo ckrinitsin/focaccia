@@ -17,6 +17,13 @@ dependencies = [
 	"lldb-python",
 ]
 
+[project.optional-dependencies]
+dev = [
+	"ruff",
+	"black",
+	"pyright",
+]
+
 [project.scripts]
 focaccia = "focaccia:cli.main"
 
@@ -27,6 +34,30 @@ build-backend = "hatchling.build"
 [tool.hatch.metadata]
 allow-direct-references = true
 
+[tool.hatch.envs.default]
+dependencies = [
+	"ruff",
+	"black",
+	"pyright",
+]
+
 [tool.uv.sources]
 cpuid = { path = "wrappers/cpuid-wrapper", editable = false }
+
+# Formatter
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.ruff]
+line-length = 100
+exclude = ["__pycache__", "result"]
+src = ["src"]
+
+[tool.pyright]
+typeCheckingMode = "standard"
+reportMissingImports = true
+reportMissingTypeStubs = false
+useLibraryCodeForTypes = true
+executionEnvironments = [ {root = "src"} ]
 
