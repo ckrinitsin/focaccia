@@ -94,6 +94,9 @@
 
 		 # Create a Python venv with the default dependency group
 		 pythonEnv = pythonSet.mkVirtualEnv "focaccia-env" workspace.deps.default;
+
+		 # Create a Python venv with the default dependency group
+		 pythonDevEnv = pythonSet.mkVirtualEnv "focaccia-env" workspace.deps.all;
 	in {
 		# Default package just builds Focaccia
 		packages.default = pythonEnv;
@@ -108,21 +111,17 @@
 		devShells = {
 			default = pkgs.mkShell {
 				packages = [
-					pythonEnv
-					pkgs.qemu-user
+					pythonDevEnv
 					pkgs.gdb
-					pkgs.gcc
-					pkgs.glibc.all
 				];
 			};
 
-			qemu-60 = pkgs.mkShell {
+			musl = pkgs.mkShell {
 				packages = [
-					pythonEnv
-					qemu-60
+					pythonDevEnv
+					pkgs.gdb
 					musl-pkgs.gcc
 					musl-pkgs.pkg-config
-					pkgs.gdb
 				];
 			};
 		};
