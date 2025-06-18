@@ -12,9 +12,9 @@ authors = [
 ]
 dependencies = [
 	"cpuid",
-	"miasm",
 	"setuptools",
 	"lldb-python",
+	"miasm",
 ]
 
 [project.optional-dependencies]
@@ -43,6 +43,7 @@ dependencies = [
 
 [tool.uv.sources]
 cpuid = { path = "wrappers/cpuid-wrapper", editable = false }
+miasm = { path = "miasm" }
 
 # Formatter
 [tool.black]

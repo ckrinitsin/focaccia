@@ -71,7 +71,7 @@ requires-dist = [
     { name = "black", marker = "extra == 'dev'" },
     { name = "cpuid", directory = "wrappers/cpuid-wrapper" },
     { name = "lldb-python" },
-    { name = "miasm" },
+    { name = "miasm", directory = "miasm" },
     { name = "pyright", marker = "extra == 'dev'" },
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "setuptools" },
@@ -99,12 +99,17 @@ wheels = [
 [[package]]
 name = "miasm"
 version = "0.1.5"
-source = { registry = "https://pypi.org/simple" }
+source = { directory = "miasm" }
 dependencies = [
     { name = "future" },
     { name = "pyparsing" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9d/53/706e9d24936f53dace112f01130c6e46773551dd19cfd6118c1b35fbb836/miasm-0.1.5.tar.gz", hash = "sha256:e90d5886cdff7601747e8c6ae0e874356436d848e5be2a44642de9d29762dc75", size = 618342, upload-time = "2023-04-18T21:29:15.47Z" }
+
+[package.metadata]
+requires-dist = [
+    { name = "future" },
+    { name = "pyparsing", specifier = ">=2.4.1" },
+]
 
 [[package]]
 name = "mypy-extensions"
@@ -153,11 +158,11 @@ wheels = [
 
 [[package]]
 name = "pyparsing"
-version = "2.4.7"
+version = "3.2.3"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/c1/47/dfc9c342c9842bbe0036c7f763d2d6686bcf5eb1808ba3e170afdb282210/pyparsing-2.4.7.tar.gz", hash = "sha256:c203ec8783bf771a155b207279b9bccb8dea02d8f0c9e5f8ead507bc3246ecc1", size = 649718, upload-time = "2020-04-05T22:21:25.349Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/bb/22/f1129e69d94ffff626bdb5c835506b3a5b4f3d070f17ea295e12c2c6f60f/pyparsing-3.2.3.tar.gz", hash = "sha256:b9c13f1ab8b3b542f72e28f634bad4de758ab3ce4546e4301970ad6fa77c38be", size = 1088608, upload-time = "2025-03-25T05:01:28.114Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8a/bb/488841f56197b13700afd5658fc279a2025a39e22449b7cf29864669b15d/pyparsing-2.4.7-py2.py3-none-any.whl", hash = "sha256:ef9d7589ef3c200abe66653d3f1ab1033c3c419ae9b9bdb1240a85b024efc88b", size = 67842, upload-time = "2020-04-05T22:21:22.897Z" },
+    { url = "https://files.pythonhosted.org/packages/05/e7/df2285f3d08fee213f2d041540fa4fc9ca6c2d44cf36d3a035bf2a8d2bcc/pyparsing-3.2.3-py3-none-any.whl", hash = "sha256:a749938e02d6fd0b59b356ca504a24982314bb090c383e3cf201c95ef7e2bfcf", size = 111120, upload-time = "2025-03-25T05:01:24.908Z" },
 ]
 
 [[package]]
