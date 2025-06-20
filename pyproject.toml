@@ -11,7 +11,7 @@ authors = [
 	{name = "Alp Berkman", email="alpberkman@gmail.com"}
 ]
 dependencies = [
-	"cpuid",
+	"cpuid @ git+https://github.com/taugoust/cpuid.py.git@master",
 	"miasm",
 	"setuptools",
 	"lldb-python",
@@ -40,9 +40,6 @@ dependencies = [
 	"black",
 	"pyright",
 ]
-
-[tool.uv.sources]
-cpuid = { path = "wrappers/cpuid-wrapper", editable = false }
 
 # Formatter
 [tool.black]

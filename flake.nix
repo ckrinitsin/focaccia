@@ -71,11 +71,8 @@
 			miasm = super.miasm.overrideAttrs (old: {
 				nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ self.setuptools ];
 			});
-			"python-cpuid" = super."python-cpuid".overrideAttrs (old: {
-				nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ 
-					self.setuptools
-					pkgs.clang
-				];
+			cpuid = super.cpuid.overrideAttrs (old: {
+				nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ self.setuptools ];
 			});
 		};
 
