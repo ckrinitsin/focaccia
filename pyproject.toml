@@ -11,7 +11,7 @@ authors = [
 	{name = "Alp Berkman", email="alpberkman@gmail.com"}
 ]
 dependencies = [
-	"miasm",
+	"miasm @ git+https://github.com/taugoust/miasm.git@ck/x86-blsi",
 	"setuptools",
 	"lldb-python",
 	"cpuid @ git+https://github.com/taugoust/cpuid.py.git@master",
@@ -22,7 +22,6 @@ dev = [
 	"ruff",
 	"black",
 	"pyright",
-	"miasm @ git+https://github.com/taugoust/miasm.git@develop",
 ]
 
 [project.scripts]

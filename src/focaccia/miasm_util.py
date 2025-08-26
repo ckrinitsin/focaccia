@@ -221,7 +221,7 @@ def _eval_cpuid(rax: ExprInt, out_reg: ExprInt):
     :param out_reg: An index in `[0, 4)` signaling which register's value
                     shall be returned. Must be concrete.
     """
-    from cpuid import cpuid
+    import cpuid
 
     regs = cpuid.CPUID()(int(rax))
 

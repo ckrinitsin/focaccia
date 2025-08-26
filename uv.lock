@@ -65,7 +65,6 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "black" },
-    { name = "miasm" },
     { name = "pyright" },
     { name = "ruff" },
 ]
@@ -75,8 +74,7 @@ requires-dist = [
     { name = "black", marker = "extra == 'dev'" },
     { name = "cpuid", git = "https://github.com/taugoust/cpuid.py.git?rev=master" },
     { name = "lldb-python" },
-    { name = "miasm" },
-    { name = "miasm", marker = "extra == 'dev'", git = "https://github.com/taugoust/miasm.git?rev=develop" },
+    { name = "miasm", git = "https://github.com/taugoust/miasm.git?rev=ck%2Fx86-blsi" },
     { name = "pyright", marker = "extra == 'dev'" },
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "setuptools" },
@@ -104,7 +102,7 @@ wheels = [
 [[package]]
 name = "miasm"
 version = "0.1.5"
-source = { git = "https://github.com/taugoust/miasm.git?rev=develop#2a15c60712b326b541d42ac48f372f97023547e7" }
+source = { git = "https://github.com/taugoust/miasm.git?rev=ck%2Fx86-blsi#1231891c1f3e1b8e7bb01822fcefe2c41b0c65c2" }
 dependencies = [
     { name = "future" },
     { name = "pyparsing" },
