@@ -14,7 +14,6 @@ authors = [
 dependencies = [
 	"miasm",
 	"setuptools",
-	"lldb-python",
 	"cpuid @ git+https://github.com/taugoust/cpuid.py.git@master",
 ]
 
@@ -31,6 +30,12 @@ focaccia = "focaccia:cli.main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.uv]
+environments = [
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "sys_platform == 'linux' and platform_machine == 'aarch64'",
+]
 
 [tool.uv.sources]
 miasm = { path = "./miasm" }

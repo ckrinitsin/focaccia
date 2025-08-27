@@ -38,7 +38,7 @@
 		pyproject-build-systems,
 		...
 	}:
-	flake-utils.lib.eachDefaultSystem (system:
+	flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ] (system:
 	let
 		qemu-60 = inputs.nixpkgs-qemu-60.qemu;
 
@@ -80,8 +80,32 @@
 			miasm = super.miasm.overrideAttrs (old: {
 				nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ self.setuptools ];
 			});
+
 			cpuid = super.cpuid.overrideAttrs (old: {
 				nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ self.setuptools ];
+			});
+
+			focaccia = super.focaccia.overrideAttrs (old: {
+				buildInputs = (old.buildInputs or []) ++ [ pkgs.lldb ];
+
+				postInstall = (old.postInstall or "") + ''
+					set -eu
+
+					target="$out/${python.sitePackages}" 
+					src="$(${pkgs.lldb}/bin/lldb -P)"
+
+					mkdir -p "$target"
+
+					# Copy the lldb Python package (and the native extension)
+					if [ -d "$src/lldb" ]; then
+						ln -sTf "$src/lldb" "$target/lldb"
+					fi
+
+					# Optional: some builds ship a top-level helper
+					if [ -f "$src/LLDB.py" ]; then
+						cp -a "$src/LLDB.py" "$target/"
+					fi
+				'';
 			});
 		};
 
@@ -115,6 +139,25 @@
 						(old.src + "/src/focaccia/__init__.py")
 					];
 				};
+
+				postInstall = (old.postInstall or "") + ''
+					set -eu
+
+					target="$out/${python.sitePackages}" 
+					src="$(${pkgs.lldb}/bin/lldb -P)"
+
+					mkdir -p "$target"
+
+					# Copy the lldb Python package (and the native extension)
+					if [ -h "$src/lldb" ]; then
+						ln -sT "$src/lldb" "$target/lldb"
+					fi
+
+					# Optional: some builds ship a top-level helper
+					if [ -f "$src/LLDB.py" ]; then
+						cp -a "$src/LLDB.py" "$target/"
+					fi
+				'';
 			});
 		};
 
