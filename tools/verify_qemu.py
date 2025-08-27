@@ -72,7 +72,7 @@ def try_remove(l: list, v):
 
 if __name__ == "__main__":
     prog = make_argparser()
-    prog.add_argument('--gdb', default='/bin/gdb',
+    prog.add_argument('--gdb', default='gdb',
                       help='GDB binary to invoke.')
     args = prog.parse_args()
 

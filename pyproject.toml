@@ -1,0 +1,64 @@
+[project]
+name = "focaccia"
+version = "0.1.0"
+requires-python = "==3.12.*"
+description = "Symbolic Tester for QEMU"
+readme = {file = "README.md", content-type = "text/markdown"}
+authors = [
+	{name = "Theofilos Augoustis", email = "theofilos.augoustis@gmail.com"},
+	{name = "Christian Krinitsin", email="christian.krinitsin@tum.de"},
+	{name = "Sebastian Reimers", email="sebastian.reimers@in.tum.de"},
+	{name = "Nicola Crivellin", email="nicola.crivellin98@gmail.com"},
+	{name = "Alp Berkman", email="alpberkman@gmail.com"}
+]
+dependencies = [
+	"miasm",
+	"setuptools",
+	"lldb-python",
+	"cpuid @ git+https://github.com/taugoust/cpuid.py.git@master",
+]
+
+[project.optional-dependencies]
+dev = [
+	"ruff",
+	"black",
+	"pyright",
+]
+
+[project.scripts]
+focaccia = "focaccia:cli.main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+miasm = { path = "./miasm" }
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.envs.default]
+dependencies = [
+	"ruff",
+	"black",
+	"pyright",
+]
+
+# Formatter
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.ruff]
+line-length = 100
+exclude = ["__pycache__", "result"]
+src = ["src"]
+
+[tool.pyright]
+typeCheckingMode = "standard"
+reportMissingImports = true
+reportMissingTypeStubs = false
+useLibraryCodeForTypes = true
+executionEnvironments = [ {root = "src"} ]
+
