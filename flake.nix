@@ -186,54 +186,97 @@
 
 		 # Create a Python venv with the default dependency group
 		 pythonDevEnv = pythonSetEditable.mkVirtualEnv "focaccia-env" workspace.deps.all;
-	in {
+
+		 uvEnv = {
+			UV_NO_SYNC = "1";
+			UV_PYTHON = python.interpreter;
+			UV_PYTHON_DOWNLOADS = "never";
+		};
+
+		uvShellHook = ''
+			unset PYTHONPATH
+
+			export REPO_ROOT=$(git rev-parse --show-toplevel)
+		'';
+	in rec {
 		# Default package just builds Focaccia
-		packages.default = pythonDevEnv;
+		packages = rec {
+			focaccia = pythonEnv;
+			dev = pythonDevEnv;
+
+			default = focaccia;
+		};
 
 		# Default app is just Focaccia
-		apps.default = {
-			type = "app";
-			program = "${self.packages.default}/bin/focaccia";
+		apps = {
+			default = {
+				type = "app";
+				program = "${packages.default}/bin/focaccia";
+			};
+
+			convert-log = {
+				type = "app";
+				program = "${packages.default}/bin/convert";
+			};
+
+			capture-transforms = {
+				type = "app";
+				program = "${packages.default}/bin/capture-transforms";
+			};
+
+			validate-qemu = {
+				type = "app";
+				program = "${packages.default}/bin/validate-qemu";
+			};
+
+			# Useful for synchronize the uv lockfile
+			uv-sync = {
+				type = "app";
+				program = "${pkgs.writeShellScriptBin "uv-sync" ''
+					set -euo pipefail
+					exec ${pkgs.uv}/bin/uv sync
+				''}/bin/uv-sync";
+			};
 		};
 
 		# Developer shell that includes Focaccia and QEMU
 		devShells = {
 			default = pkgs.mkShell {
 				packages = [
-					pythonDevEnv
+					packages.dev
+					pkgs.uv
 					pkgs.gdb
 					pkgs.git
 				];
 
-				env = {
-					UV_NO_SYNC = "1";
-					UV_PYTHON = python.interpreter;
-					UV_PYTHON_DOWNLOADS = "never";
-				};
-
-				shellHook = ''
-					unset PYTHONPATH
-
-					export REPO_ROOT=$(git rev-parse --show-toplevel)
-				'';
+				env = uvEnv;
+				shellHook = uvShellHook;
 			};
 
 			glibc = pkgs.mkShell {
 				packages = [
-					pythonEnv
+					packages.dev
+					pkgs.uv
 					pkgs.gdb
 					pkgs.gcc
 					pkgs.glibc.all
 				];
+
+				env = uvEnv;
+				shellHook = uvShellHook;
 			};
 
 			musl = pkgs.mkShell {
 				packages = [
-					pythonDevEnv
+					packages.dev
+					pkgs.uv
 					pkgs.gdb
 					musl-pkgs.gcc
 					musl-pkgs.pkg-config
 				];
+
+				env = uvEnv;
+				shellHook = uvShellHook;
 			};
 		};
 	});
